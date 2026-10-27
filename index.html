@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>สมุดบัญชีทีมเล็ก</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f6f4;--sf:#fff;--tx:#1d2b26;--mu:#66756f;--ln:#dbe4df;--pr:#0f6b57;--prt:#fff;--inc:#0f7a4f;--exp:#c2410c;--soft:#e4efe9;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a17;--sf:#1b2622;--tx:#e8f0ec;--mu:#98a8a1;--ln:#2f3e38;--pr:#3fb594;--prt:#06201a;--inc:#4cc78e;--exp:#ff9a62;--soft:#243530}}
+:root[data-theme="dark"]{--bg:#121a17;--sf:#1b2622;--tx:#e8f0ec;--mu:#98a8a1;--ln:#2f3e38;--pr:#3fb594;--prt:#06201a;--inc:#4cc78e;--exp:#ff9a62;--soft:#243530}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:400 15px/1.6 'Noto Sans Thai',system-ui,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:12px 14px 80px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:8px 0}
+h1{font-size:20px;margin:0;font-weight:700}
+h2{font-size:16px;margin:0 0 10px;font-weight:700}
+nav{display:flex;gap:6px;overflow-x:auto;padding:6px 0 10px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5}
+nav button{flex:none;border:1px solid var(--ln);background:var(--sf);color:var(--tx);padding:7px 14px;border-radius:999px;font:inherit;cursor:pointer}
+nav button.on{background:var(--pr);color:var(--prt);border-color:var(--pr);font-weight:500}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:14px;margin-bottom:12px}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.sum{border-left:4px solid var(--ln);padding:6px 12px;background:var(--sf);border-radius:6px}
+.sum small{color:var(--mu);display:block}.sum b{font-size:20px}
+.sum.i{border-color:var(--inc)}.sum.e{border-color:var(--exp)}.sum.b{border-color:var(--pr)}
+.inc{color:var(--inc)}.exp{color:var(--exp)}.mu{color:var(--mu)}
+label{display:block;font-size:13px;color:var(--mu);margin-bottom:3px}
+input,select,textarea{width:100%;font:inherit;padding:8px 10px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--tx)}
+input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--pr);outline-offset:1px}
+.f{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));align-items:end}
+.btn{background:var(--pr);color:var(--prt);border:0;padding:9px 16px;border-radius:8px;font:inherit;font-weight:500;cursor:pointer}
+.btn.g{background:transparent;color:var(--tx);border:1px solid var(--ln)}
+.btn.s{padding:3px 10px;font-size:13px}
+.seg{display:flex;gap:6px}.seg button{flex:1}
+.row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--ln)}
+.row:last-child{border:0}.row .g1{flex:1;min-width:0}.row .g1 small{color:var(--mu);display:block;overflow:hidden;text-overflow:ellipsis}
+.amt{font-weight:500;white-space:nowrap}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:480px}th,td{padding:7px 8px;border-bottom:1px solid var(--ln);text-align:right}th:first-child,td:first-child{text-align:left}th{color:var(--mu);font-weight:500}
+.bar{height:8px;background:var(--soft);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--pr)}
+.tag{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;background:var(--soft)}
+.tag.ok{background:var(--inc);color:var(--prt)}.tag.no{background:var(--exp);color:var(--prt)}
+.top{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:12px}.top>div{width:170px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+#modal img{max-width:100%;max-height:90vh;border-radius:8px}
+.empty{color:var(--mu);text-align:center;padding:18px 0}
+@media print{nav,.noprint{display:none!important}}
+</style>
+</head>
+<body>
+<div id="login" class="wrap" style="display:none;max-width:380px;padding-top:12vh">
+<div class="card"><h2>เข้าสู่ระบบ</h2>
+<div style="margin-bottom:10px"><label>อีเมล</label><input id="le" type="email" autocomplete="username"></div>
+<div style="margin-bottom:10px"><label>รหัสผ่าน</label><input id="lp" type="password" autocomplete="current-password"></div>
+<button class="btn" style="width:100%" onclick="doLogin()">เข้าสู่ระบบ</button><p id="lerr" class="exp" style="margin:8px 0 0"></p></div></div>
+<div class="wrap" id="app" style="display:none">
+<header><h1 id="org">สมุดบัญชีทีมเล็ก</h1><span class="mu" style="text-align:right;font-size:13px"><span id="today"></span><br><span id="who"></span> <a href="#" onclick="doLogout();return false" style="color:var(--pr)">ออกจากระบบ</a></span></header>
+<nav id="nav"></nav>
+<main id="v"></main>
+</div>
+<div id="modal" onclick="this.style.display='none'"></div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyAl31UmWfCarlzi4cihKXPCa4H54yLpACM",
+  authDomain: "cuan-aan-accounting.firebaseapp.com",
+  projectId: "cuan-aan-accounting",
+  storageBucket: "cuan-aan-accounting.firebasestorage.app",
+  messagingSenderId: "488971858602",
+  appId: "1:488971858602:web:0fd30987bb8a91cbde56d3",
+  measurementId: "G-ZEYF6ZG40P"
+};
+const fbApp=initializeApp(firebaseConfig),auth=getAuth(fbApp),db=getFirestore(fbApp);
+const $=s=>document.querySelector(s);
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const CI=['ค่าสมาชิก','เงินสนับสนุน','ขายสินค้า/บริการ','อื่นๆ'];
+const CE=['ค่าเช่า','ค่าน้ำ/ไฟ','เงินเดือน/ค่าแรง','วัสดุอุปกรณ์','เดินทาง','อาหาร/เครื่องดื่ม','อื่นๆ'];
+const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const def=()=>({org:'องค์กรของเรา',members:[],banks:[],tx:[],dues:{},stm:[],roles:[]});
+let S=def();
+const COLS=['tx','members','banks','stm','roles'];
+const freshP=()=>({tx:[],members:[],banks:[],stm:[],roles:[],dues:{},org:null});
+let P=freshP(),errShown=false,ROLE=null,roleChecked=false;
+const ADMIN=()=>ROLE==='admin';
+const me=()=>auth.currentUser.email.toLowerCase();
+const NOACC='<div class="card"><h2>ยังไม่มีสิทธิ์เข้าใช้งาน</h2><p class="mu">บัญชีนี้ยังไม่ได้รับสิทธิ์ กรุณาแจ้งผู้ดูแลระบบ (Admin) ให้เพิ่มอีเมลของคุณในหน้าตั้งค่า</p></div>';
+const clone=o=>JSON.parse(JSON.stringify(o));
+const err=e=>{console.error(e);if(!errShown){errShown=true;alert('เชื่อมต่อฐานข้อมูลไม่สำเร็จ ('+(e.code||e.message)+') ตรวจสอบ Security Rules, โดเมนที่อนุญาต และขนาดไฟล์แนบ');setTimeout(()=>errShown=false,3000)}};
+function save(){
+ try{
+  for(const c of COLS){
+   const old=new Map(P[c].map(x=>[x.id,JSON.stringify(x)]));
+   for(const x of S[c]){if(old.get(x.id)!==JSON.stringify(x))setDoc(doc(db,c,x.id),x).catch(err);old.delete(x.id)}
+   for(const id of old.keys())deleteDoc(doc(db,c,id)).catch(err);
+  }
+  for(const m of new Set([...Object.keys(S.dues),...Object.keys(P.dues)])){
+   const a=S.dues[m]||{};
+   if(JSON.stringify(a)!==JSON.stringify(P.dues[m]||{})){(Object.keys(a).length?setDoc(doc(db,'dues',m),a):deleteDoc(doc(db,'dues',m))).catch(err)}
+  }
+  if(S.org!==P.org)setDoc(doc(db,'meta','org'),{name:S.org}).catch(err);
+ }catch(e){err(e);return false}
+ return true;
+}
+const now=new Date();
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+let M=iso(now),T='home',TYPE='out';
+const mlabel=m=>{const[y,k]=m.split('-');return MN[k-1]+' '+(+y+543)};
+$('#today').textContent=now.toLocaleDateString('th-TH',{dateStyle:'medium'});
+
+// ---- files ----
+function readFile(f){return new Promise((res,rej)=>{
+ if(!f)return res(null);
+ const r=new FileReader();
+ if(f.type.startsWith('image/')){
+  r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,1000/(im.width,im.height));const c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);res({name:f.name,data:c.toDataURL('image/jpeg',.65)})};im.onerror=()=>rej();im.src=r.result};
+ }else{
+  if(f.size>600000){alert('ไฟล์ PDF ใหญ่เกิน 0.6 MB');return res(null)}
+  r.onload=()=>res({name:f.name,data:r.result});
+ }
+ r.onerror=()=>rej();r.readAsDataURL(f)})}
+function openFile(id,kind){
+ const o=(kind==='s'?S.stm:S.tx).find(x=>x.id===id);const f=kind==='s'?o:o&&o.file;if(!f)return;
+ if(f.data.startsWith('data:image')){const m=$('#modal');m.innerHTML='<img alt="'+esc(f.name)+'" src="'+f.data+'">';m.style.display='flex'}
+ else{const[h,b]=f.data.split(',');const bin=atob(b),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);window.open(URL.createObjectURL(new Blob([a],{type:h.slice(5).split(';')[0]})),'_blank')}
+}
+
+// ---- calc ----
+const inM=m=>S.tx.filter(t=>t.date.startsWith(m));
+const sum=(a,t)=>a.filter(x=>x.type===t).reduce((s,x)=>s+ +x.amount,0);
+const cards=a=>{const i=sum(a,'in'),e=sum(a,'out');return `<div class="grid"><div class="sum i"><small>รายรับ</small><b class="inc">${fmt(i)}</b></div><div class="sum e"><small>รายจ่าย</small><b class="exp">${fmt(e)}</b></div><div class="sum b"><small>คงเหลือ</small><b>${fmt(i-e)}</b></div></div>`};
+const monthPick=()=>`<div class="top noprint"><div><label>เดือน</label><input type="month" value="${M}" onchange="setM(this.value)"></div></div>`;
+
+// ---- views ----
+const TABS=[['home','ภาพรวม'],['tx','รายรับ-รายจ่าย'],['dues','Support Project'],['rep','รายงาน'],['doc','สเตจเมนต์'],['set','ตั้งค่า']];
+function R(){
+ $('#org').textContent=S.org;
+ if(!ROLE){$('#nav').innerHTML='';$('#who').textContent=auth.currentUser?auth.currentUser.email:'';$('#v').innerHTML=roleChecked?NOACC:'<div class="empty">กำลังโหลด...</div>';return}
+ if(T==='set'&&!ADMIN())T='home';
+ $('#who').textContent=auth.currentUser.email+' ('+(ADMIN()?'Admin':'Member')+')';
+ $('#nav').innerHTML=TABS.filter(t=>t[0]!=='set'||ADMIN()).map(([k,n])=>`<button class="${T===k?'on':''}" onclick="setT('${k}')">${n}</button>`).join('');
+ $('#v').innerHTML=({home:vHome,tx:vTx,dues:vDues,rep:vRep,doc:vDoc,set:vSet})[T]();
+}
+function banks(){return S.banks.length?S.banks.map(b=>`<div class="row"><div class="g1"><b>${esc(b.bank)}</b> ${esc(b.no)}<small>ชื่อบัญชี ${esc(b.name)}</small></div><button class="btn g s" onclick="cp('${esc(b.no)}',this)">คัดลอกเลขบัญชี</button></div>`).join(''):'<div class="empty">ยังไม่มีบัญชีรับโอน เพิ่มได้ที่หน้าตั้งค่า</div>'}
+function cp(t,b){try{navigator.clipboard.writeText(t)}catch(e){}b.textContent='คัดลอกแล้ว';setTimeout(()=>b.textContent='คัดลอกเลขบัญชี',1200)}
+function vHome(){
+ const unpaid=S.members.filter(m=>!(S.dues[M]||{})[m.id]);
+ return monthPick()+`<h2>${mlabel(M)}</h2>`+cards(inM(M))+`<div class="card" style="margin-top:12px"><h2>ยอดสะสมทั้งหมด</h2>${cards(S.tx)}</div>
+ <div class="card"><h2>ค้างชำระเดือนนี้ (${unpaid.length} คน)</h2>${unpaid.length?unpaid.map(m=>`<div class="row"><div class="g1">${esc(m.name)}</div><span class="amt exp">${fmt(m.fee)}</span></div>`).join(''):`<div class="empty">${S.members.length?'ชำระครบทุกคนแล้ว':'ยังไม่มีสมาชิก เพิ่มได้ที่หน้าตั้งค่า'}</div>`}</div>
+ <div class="card"><h2>บัญชีสำหรับโอนเงิน</h2>${banks()}</div>`;
+}
+function vTx(){
+ const cats=TYPE==='in'?CI:CE;
+ const list=inM(M).sort((a,b)=>b.date.localeCompare(a.date));
+ return `<div class="card"><h2>บันทึกรายการ</h2>
+ <div class="seg" style="margin-bottom:10px"><button class="btn ${TYPE==='in'?'':'g'}" onclick="setType('in')">รายรับ</button><button class="btn ${TYPE==='out'?'':'g'}" onclick="setType('out')">รายจ่าย</button></div>
+ <div class="f"><div><label>วันที่</label><input id="d" type="date" value="${now.toISOString().slice(0,10)}"></div>
+ <div><label>จำนวนเงิน (บาท)</label><input id="a" type="number" min="0" step="0.01" inputmode="decimal"></div>
+ <div><label>หมวดหมู่</label><select id="c">${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
+ <div><label>รายละเอียด</label><input id="n" placeholder="เช่น ค่าไฟเดือนนี้"></div>
+ <div><label>${TYPE==='out'?'แนบสลิป / ใบเสร็จ':'แนบหลักฐาน (ถ้ามี)'}</label><input id="fl" type="file" accept="image/*,application/pdf"></div>
+ <div><button class="btn" style="width:100%" onclick="addTx()">บันทึก${TYPE==='in'?'รายรับ':'รายจ่าย'}</button></div></div></div>
+ ${monthPick()}${cards(list)}
+ <div class="card" style="margin-top:12px"><h2>รายการเดือน ${mlabel(M)}</h2>${list.length?list.map(t=>`<div class="row"><div class="g1"><b>${esc(t.cat)}</b> <small>${t.date} ${esc(t.note)}</small></div>${t.file?`<button class="btn g s" onclick="openFile('${t.id}')">ดูสลิป</button>`:''}<span class="amt ${t.type==='in'?'inc':'exp'}">${t.type==='in'?'+':'-'}${fmt(t.amount)}</span>${ADMIN()?`<button class="btn g s" aria-label="ลบ" onclick="delTx('${t.id}')">ลบ</button>`:''}</div>`).join(''):'<div class="empty">ยังไม่มีรายการในเดือนนี้</div>'}</div>`;
+}
+async function addTx(){
+ const a=+$('#a').value,d=$('#d').value;
+ if(!(a>0)||!d){alert('กรุณากรอกวันที่และจำนวนเงิน');return}
+ let file=null;try{file=await readFile($('#fl').files[0])}catch(e){alert('อ่านไฟล์ไม่ได้');return}
+ S.tx.push({id:uid(),type:TYPE,date:d,amount:a,cat:$('#c').value,note:$('#n').value,file});
+ if(save()){M=d.slice(0,7);R()}else S.tx.pop();
+}
+function delTx(id){if(!ADMIN())return;if(!confirm('ลบรายการนี้?'))return;S.tx=S.tx.filter(t=>t.id!==id);save();R()}
+function vDues(){
+ const D=S.dues[M]||{};const paid=S.members.filter(m=>D[m.id]);
+ const got=paid.reduce((s,m)=>s+ +m.fee,0),all=S.members.reduce((s,m)=>s+ +m.fee,0);
+ return monthPick()+`<div class="grid"><div class="sum i"><small>เก็บแล้ว (${paid.length}/${S.members.length} คน)</small><b class="inc">${fmt(got)}</b></div><div class="sum e"><small>ค้างชำระ</small><b class="exp">${fmt(all-got)}</b></div></div>
+ <div class="card" style="margin-top:12px"><h2>สถานะการชำระ ${mlabel(M)}</h2>
+ ${S.members.length?S.members.map(m=>`<div class="row"><div class="g1"><b>${esc(m.name)}</b><small>${D[m.id]?'ชำระเมื่อ '+D[m.id]:'ยังไม่ชำระ'}</small></div><span class="amt">${fmt(m.fee)}</span><span class="tag ${D[m.id]?'ok':'no'}">${D[m.id]?'ชำระแล้ว':'ค้าง'}</span>${D[m.id]&&!ADMIN()?'':`<button class="btn ${D[m.id]?'g':''} s" onclick="payTog('${m.id}')">${D[m.id]?'ยกเลิก':'ทำเครื่องหมายว่าชำระ'}</button>`}</div>`).join(''):'<div class="empty">ยังไม่มีสมาชิก เพิ่มได้ที่หน้าตั้งค่า</div>'}
+ <p class="mu" style="font-size:13px;margin:10px 0 0">เมื่อทำเครื่องหมายว่าชำระ ระบบจะบันทึกเป็นรายรับหมวด “ค่าสมาชิก” ให้อัตโนมัติ</p></div>
+ <div class="card"><h2>โอนเงินเข้าบัญชี</h2>${banks()}</div>`;
+}
+function payTog(id){if(!ADMIN()&&(S.dues[M]||{})[id])return;
+ const m=S.members.find(x=>x.id===id),k='d_'+M+'_'+id;S.dues[M]=S.dues[M]||{};
+ if(S.dues[M][id]){delete S.dues[M][id];S.tx=S.tx.filter(t=>t.id!==k)}
+ else{const d=now.toISOString().slice(0,10);S.dues[M][id]=d;S.tx.push({id:k,type:'in',date:d,amount:m.fee,cat:'ค่าสมาชิก',note:m.name+' '+mlabel(M),file:null})}
+ save();R();
+}
+function vRep(){
+ const Y=M.slice(0,4),a=inM(M);
+ const cat=(t)=>{const o={};a.filter(x=>x.type===t).forEach(x=>o[x.cat]=(o[x.cat]||0)+ +x.amount);const tot=Object.values(o).reduce((s,v)=>s+v,0);return Object.entries(o).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`<div style="margin-bottom:8px"><div class="row" style="border:0;padding:0"><div class="g1">${esc(k)}</div><span class="amt">${fmt(v)}</span><span class="mu" style="width:44px;text-align:right">${(v/tot*100).toFixed(0)}%</span></div><div class="bar"><i style="width:${v/tot*100}%"></i></div></div>`).join('')||'<div class="empty">ไม่มีข้อมูล</div>'};
+ let rows='',ti=0,te=0;
+ for(let k=1;k<=12;k++){const m=Y+'-'+String(k).padStart(2,'0'),x=inM(m),i=sum(x,'in'),e=sum(x,'out');ti+=i;te+=e;rows+=`<tr><td>${MN[k-1]}</td><td class="inc">${fmt(i)}</td><td class="exp">${fmt(e)}</td><td>${fmt(i-e)}</td></tr>`}
+ return monthPick()+`<h2>รายงานสรุป ${S.org} – ${mlabel(M)}</h2>${cards(a)}
+ <div class="grid" style="margin-top:12px"><div class="card"><h2>รายรับแยกหมวด</h2>${cat('in')}</div><div class="card"><h2>รายจ่ายแยกหมวด</h2>${cat('out')}</div></div>
+ <div class="card"><h2>สรุปรายเดือน ปี ${+Y+543}</h2><div class="tbl"><table><tr><th>เดือน</th><th>รายรับ</th><th>รายจ่าย</th><th>คงเหลือ</th></tr>${rows}<tr><th>รวม</th><th class="inc">${fmt(ti)}</th><th class="exp">${fmt(te)}</th><th>${fmt(ti-te)}</th></tr></table></div></div>
+ <button class="btn noprint" onclick="window.print()">พิมพ์รายงาน</button>`;
+}
+function vDoc(){
+ const l=S.stm.filter(s=>s.month===M);
+ return monthPick()+`<div class="card noprint"><h2>แนบสเตจเมนต์ธนาคาร</h2><div class="f"><div><label>ชื่อเอกสาร</label><input id="sn" placeholder="เช่น Statement บัญชีหลัก"></div><div><label>ไฟล์ (รูปภาพหรือ PDF)</label><input id="sf" type="file" accept="image/*,application/pdf"></div><div><button class="btn" style="width:100%" onclick="addStm()">แนบสำหรับ ${mlabel(M)}</button></div></div></div>
+ <div class="card"><h2>เอกสารเดือน ${mlabel(M)}</h2>${l.length?l.map(s=>`<div class="row"><div class="g1"><b>${esc(s.title)}</b><small>${esc(s.name)}</small></div><button class="btn g s" onclick="openFile('${s.id}','s')">เปิดดู</button>${ADMIN()?`<button class="btn g s" onclick="delStm('${s.id}')">ลบ</button>`:''}</div>`).join(''):'<div class="empty">ยังไม่มีสเตจเมนต์ในเดือนนี้</div>'}</div>`;
+}
+async function addStm(){
+ const f=$('#sf').files[0];if(!f){alert('กรุณาเลือกไฟล์');return}
+ let r;try{r=await readFile(f)}catch(e){alert('อ่านไฟล์ไม่ได้');return}
+ if(!r)return;S.stm.push({id:uid(),month:M,title:$('#sn').value||'สเตจเมนต์',name:r.name,data:r.data});
+ if(save())R();else S.stm.pop();
+}
+function delStm(id){if(!ADMIN())return;if(!confirm('ลบเอกสารนี้?'))return;S.stm=S.stm.filter(s=>s.id!==id);save();R()}
+function vSet(){
+ return `<div class="card"><h2>ชื่อองค์กร</h2><div class="f"><input id="on" value="${esc(S.org)}"><button class="btn" onclick="saveOrg()">บันทึกชื่อ</button></div></div>
+ <div class="card"><h2>สมาชิกและยอด Support Project รายเดือน (สูงสุด 10 คน)</h2>
+ ${S.members.map(m=>`<div class="row"><div class="g1">${esc(m.name)}</div><span class="amt">${fmt(m.fee)} บาท/เดือน</span><button class="btn g s" onclick="delMem('${m.id}')">ลบ</button></div>`).join('')||'<div class="empty">ยังไม่มีสมาชิก</div>'}
+ <div class="f" style="margin-top:10px"><div><label>ชื่อ</label><input id="mn"></div><div><label>ยอด Support Project/เดือน (บาท)</label><input id="mf" type="number" min="0" inputmode="decimal"></div><button class="btn" onclick="addMem()">เพิ่มสมาชิก</button></div></div>
+ <div class="card"><h2>บัญชีสำหรับโอนเงิน</h2>
+ ${S.banks.map(b=>`${bankRow(b)}`).join('')||'<div class="empty">ยังไม่มีบัญชี</div>'}
+ <div class="f" style="margin-top:10px"><div><label>ธนาคาร / PromptPay</label><input id="bb" placeholder="เช่น กสิกรไทย"></div><div><label>เลขบัญชี</label><input id="bn" inputmode="numeric"></div><div><label>ชื่อบัญชี</label><input id="bm"></div><button class="btn" onclick="addBank()">เพิ่มบัญชี</button></div></div>
+ <div class="card"><h2>ผู้ใช้และสิทธิ์</h2><p class="mu" style="margin-top:0;font-size:13px">สร้างบัญชีล็อกอินที่ Firebase Console → Authentication ก่อน แล้วกำหนดสิทธิ์ที่นี่ด้วยอีเมลเดียวกัน Member เพิ่มข้อมูลได้แต่ลบและตั้งค่าไม่ได้ Admin ทำได้ทุกอย่าง</p>
+ ${S.roles.map(r=>`<div class="row"><div class="g1">${esc(r.id)}</div><span class="tag">${r.role==='admin'?'Admin':'Member'}</span><button class="btn g s" onclick="togRole('${esc(r.id)}')">เปลี่ยนเป็น ${r.role==='admin'?'Member':'Admin'}</button><button class="btn g s" onclick="delRole('${esc(r.id)}')">ลบ</button></div>`).join('')||'<div class="empty">ยังไม่มีผู้ใช้</div>'}
+ <div class="f" style="margin-top:10px"><div><label>อีเมล</label><input id="re" type="email"></div><div><label>สิทธิ์</label><select id="rr"><option value="member">Member</option><option value="admin">Admin</option></select></div><button class="btn" onclick="addRole()">เพิ่มสิทธิ์</button></div></div>
+ <div class="card"><h2>บัญชีผู้ใช้</h2><p class="mu" style="margin-top:0">ข้อมูลทั้งหมดเก็บบน Firebase และใช้ร่วมกันทั้งทีม · เข้าสู่ระบบด้วย ${esc(auth.currentUser?auth.currentUser.email:'')}</p><button class="btn g" onclick="doLogout()">ออกจากระบบ</button></div>`;
+}
+let EB=null;
+function bankRow(b){
+ if(EB===b.id)return `<div class="f" style="padding:10px 0;border-bottom:1px solid var(--ln)"><div><label>ธนาคาร / PromptPay</label><input id="eb1" value="${esc(b.bank)}"></div><div><label>เลขบัญชี</label><input id="eb2" inputmode="numeric" value="${esc(b.no)}"></div><div><label>ชื่อบัญชี</label><input id="eb3" value="${esc(b.name)}"></div><div class="seg"><button class="btn" onclick="saveBank('${b.id}')">บันทึก</button><button class="btn g" onclick="setEB(null)">ยกเลิก</button></div></div>`;
+ return `<div class="row"><div class="g1"><b>${esc(b.bank)}</b> ${esc(b.no)}<small>${esc(b.name)}</small></div><button class="btn g s" onclick="setEB('${b.id}')">แก้ไข</button><button class="btn g s" onclick="delBank('${b.id}')">ลบ</button></div>`;
+}
+function saveBank(id){const n=$('#eb2').value.trim();if(!n){alert('กรุณากรอกเลขบัญชี');return}const b=S.banks.find(x=>x.id===id);b.bank=$('#eb1').value;b.no=n;b.name=$('#eb3').value;EB=null;save();R()}
+function addMem(){const n=$('#mn').value.trim();if(!n)return;if(S.members.length>=10){alert('เพิ่มได้สูงสุด 10 คน');return}S.members.push({id:uid(),name:n,fee:+$('#mf').value||0});save();R()}
+function delMem(id){if(!confirm('ลบสมาชิกคนนี้?'))return;S.members=S.members.filter(m=>m.id!==id);save();R()}
+function addBank(){const n=$('#bn').value.trim();if(!n)return;S.banks.push({id:uid(),bank:$('#bb').value,no:n,name:$('#bm').value});save();R()}
+function delBank(id){S.banks=S.banks.filter(b=>b.id!==id);save();R()}
+function setT(k){T=k;R()}
+function setType(t){TYPE=t;R()}
+function setM(v){M=v||M;R()}
+function setEB(id){EB=id;R()}
+function saveOrg(){S.org=$('#on').value||S.org;save();R()}
+async function doLogin(){$('#lerr').textContent='';try{await signInWithEmailAndPassword(auth,$('#le').value.trim(),$('#lp').value)}catch(e){$('#lerr').textContent='อีเมลหรือรหัสผ่านไม่ถูกต้อง'}}
+function doLogout(){signOut(auth)}
+$('#lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+function addRole(){const e=$('#re').value.trim().toLowerCase();if(!e)return;S.roles=S.roles.filter(r=>r.id!==e);S.roles.push({id:e,role:$('#rr').value});save();R()}
+function togRole(id){if(id===me()){alert('ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้');return}const r=S.roles.find(x=>x.id===id);r.role=r.role==='admin'?'member':'admin';save();R()}
+function delRole(id){if(id===me()){alert('ไม่สามารถลบสิทธิ์ของตัวเองได้');return}if(!confirm('ลบสิทธิ์ผู้ใช้นี้?'))return;S.roles=S.roles.filter(r=>r.id!==id);save();R()}
+Object.assign(window,{addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
+const RR=()=>{const a=document.activeElement;if(a&&['INPUT','SELECT','TEXTAREA'].includes(a.tagName)&&$('#v').contains(a))return;R()};
+let unsubs=[];
+function listen(){
+ unsubs.forEach(u=>u());unsubs=[];
+ for(const c of COLS)if(c!=='roles'||ADMIN())unsubs.push(onSnapshot(collection(db,c),q=>{S[c]=q.docs.map(d=>d.data());P[c]=clone(S[c]);RR()},err));
+ unsubs.push(onSnapshot(collection(db,'dues'),q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S.dues=o;P.dues=clone(o);RR()},err));
+ unsubs.push(onSnapshot(doc(db,'meta','org'),q=>{S.org=q.exists()?q.data().name:def().org;P.org=S.org;RR()},err));
+}
+let roleUnsub=null;
+onAuthStateChanged(auth,u=>{
+ $('#login').style.display=u?'none':'block';$('#app').style.display=u?'block':'none';
+ if(roleUnsub){roleUnsub();roleUnsub=null}
+ unsubs.forEach(x=>x());unsubs=[];S=def();P=freshP();ROLE=null;roleChecked=false;
+ if(!u)return;
+ R();
+ roleUnsub=onSnapshot(doc(db,'roles',u.email.toLowerCase()),q=>{
+  const r=q.exists()?q.data().role:null;roleChecked=true;
+  if(r===ROLE&&unsubs.length){return}
+  ROLE=r;
+  if(ROLE)listen();else{unsubs.forEach(x=>x());unsubs=[]}
+  R();
+ },err);
+});
+</script>
+</body>
+</html>
