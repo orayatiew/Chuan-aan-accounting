@@ -100,7 +100,7 @@ const fmt=n=>Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximu
 const CI=['ค่าสมาชิก','เงินสนับสนุน','ขายสินค้า/บริการ','อื่นๆ'];
 const CE=['ค่าเช่า','ค่าน้ำ/ไฟ','เงินเดือน/ค่าแรง','วัสดุอุปกรณ์','เดินทาง','อาหาร/เครื่องดื่ม','อื่นๆ'];
 const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-const def=()=>({org:'Chuan ann Accounting',members:[],banks:[],tx:[],dues:{},stm:[],roles:[]});
+const def=()=>({org:'องค์กรของเรา',members:[],banks:[],tx:[],dues:{},stm:[],roles:[]});
 let S=def();
 const COLS=['tx','members','banks','stm','roles'];
 const freshP=()=>({tx:[],members:[],banks:[],stm:[],roles:[],dues:{},org:null});
@@ -250,7 +250,7 @@ async function addStm(){
 function delStm(id){if(!ADMIN())return;if(!confirm('ลบเอกสารนี้?'))return;S.stm=S.stm.filter(s=>s.id!==id);save();R()}
 function vSet(){
  return `<div class="card"><h2>ชื่อองค์กร</h2><div class="f"><input id="on" value="${esc(S.org)}"><button class="btn" onclick="saveOrg()">บันทึกชื่อ</button></div></div>
- <div class="card"><h2>สมาชิกและยอด Support Project รายเดือน (สูงสุด 10 คน)</h2>
+ <div class="card"><h2>สมาชิกและยอด Support Project รายเดือน (สูงสุด 20 คน)</h2>
  ${S.members.map(m=>`<div class="row"><div class="g1">${esc(m.name)}</div><span class="amt">${fmt(m.fee)} บาท/เดือน</span><button class="btn g s" onclick="delMem('${m.id}')">ลบ</button></div>`).join('')||'<div class="empty">ยังไม่มีสมาชิก</div>'}
  <div class="f" style="margin-top:10px"><div><label>ชื่อ</label><input id="mn"></div><div><label>ยอด Support Project/เดือน (บาท)</label><input id="mf" type="number" min="0" inputmode="decimal"></div><button class="btn" onclick="addMem()">เพิ่มสมาชิก</button></div></div>
  <div class="card"><h2>บัญชีสำหรับโอนเงิน</h2>
@@ -283,7 +283,7 @@ function bankRow(b){
  return `<div class="row"><div class="g1"><b>${esc(b.bank)}</b> ${esc(b.no)}<small>${esc(b.name)}</small></div><button class="btn g s" onclick="setEB('${b.id}')">แก้ไข</button><button class="btn g s" onclick="delBank('${b.id}')">ลบ</button></div>`;
 }
 function saveBank(id){const n=$('#eb2').value.trim();if(!n){alert('กรุณากรอกเลขบัญชี');return}const b=S.banks.find(x=>x.id===id);b.bank=$('#eb1').value;b.no=n;b.name=$('#eb3').value;EB=null;save();R()}
-function addMem(){const n=$('#mn').value.trim();if(!n)return;if(S.members.length>=10){alert('เพิ่มได้สูงสุด 10 คน');return}S.members.push({id:uid(),name:n,fee:+$('#mf').value||0});save();R()}
+function addMem(){const n=$('#mn').value.trim();if(!n)return;if(S.members.length>=20){alert('เพิ่มได้สูงสุด 20 คน');return}S.members.push({id:uid(),name:n,fee:+$('#mf').value||0});save();R()}
 function delMem(id){if(!confirm('ลบสมาชิกคนนี้?'))return;S.members=S.members.filter(m=>m.id!==id);save();R()}
 function addBank(){const n=$('#bn').value.trim();if(!n)return;S.banks.push({id:uid(),bank:$('#bb').value,no:n,name:$('#bm').value});save();R()}
 function delBank(id){S.banks=S.banks.filter(b=>b.id!==id);save();R()}
