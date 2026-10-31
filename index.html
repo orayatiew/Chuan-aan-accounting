@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>สมุดบัญชีทีมเล็ก</title>
+<title>Chuan aan Accounting</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{color-scheme:light;--bg:#F8F1E3;--sf:#FFFDF8;--tx:#1A1630;--mu:#6B6585;--ln:#E2D8C6;--pr:#472A99;--prt:#fff;--tg:#fff;--inc:#16838C;--exp:#D42A48;--soft:#EFECFF;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -74,7 +74,7 @@ nav{scrollbar-width:none;-webkit-overflow-scrolling:touch}nav::-webkit-scrollbar
 <div style="margin-bottom:10px"><label>รหัสผ่าน</label><input id="lp" type="password" autocomplete="current-password"></div>
 <button class="btn" style="width:100%" onclick="doLogin()">เข้าสู่ระบบ</button><p id="lerr" class="exp" style="margin:8px 0 0"></p></div></div>
 <div class="wrap" id="app" style="display:none">
-<header><h1 id="org">สมุดบัญชีทีมเล็ก</h1><span class="mu" style="text-align:right;font-size:13px"><span id="today"></span><br><span id="who"></span> <a href="#" onclick="doLogout();return false" style="color:var(--pr)">ออกจากระบบ</a></span></header>
+<header><h1 id="org">Chuan aan Accounting</h1><span class="mu" style="text-align:right;font-size:13px"><span id="today"></span><br><span id="who"></span> <a href="#" onclick="doLogout();return false" style="color:var(--pr)">ออกจากระบบ</a></span></header>
 <nav id="nav"></nav>
 <main id="v"></main>
 </div>
@@ -100,10 +100,10 @@ const fmt=n=>Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximu
 const CI=['ค่าสมาชิก','เงินสนับสนุน','ขายสินค้า/บริการ','อื่นๆ'];
 const CE=['Claude','Figma','เงินเดือน/ค่าแรง','วัสดุอุปกรณ์','เดินทาง','อาหาร/เครื่องดื่ม','อื่นๆ'];
 const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-const def=()=>({org:'Chuan Aan Accouting',members:[],banks:[],tx:[],dues:{},stm:[],roles:[]});
+const def=()=>({org:'Chuan Aan Accouting',members:[],banks:[],tx:[],dues:{},stm:[],roles:[],notes:[],cats:{in:[...CI],out:[...CE]}});
 let S=def();
-const COLS=['tx','members','banks','stm','roles'];
-const freshP=()=>({tx:[],members:[],banks:[],stm:[],roles:[],dues:{},org:null});
+const COLS=['tx','members','banks','stm','roles','notes'];
+const freshP=()=>({tx:[],members:[],banks:[],stm:[],roles:[],notes:[],dues:{},org:def().org,cats:{in:[...CI],out:[...CE]}});
 let P=freshP(),errShown=false,ROLE=null,roleChecked=false;
 const ADMIN=()=>ROLE==='admin';
 const me=()=>auth.currentUser.email.toLowerCase();
@@ -122,6 +122,7 @@ function save(){
    if(JSON.stringify(a)!==JSON.stringify(P.dues[m]||{})){(Object.keys(a).length?setDoc(doc(db,'dues',m),a):deleteDoc(doc(db,'dues',m))).catch(err)}
   }
   if(S.org!==P.org)setDoc(doc(db,'meta','org'),{name:S.org}).catch(err);
+  if(JSON.stringify(S.cats)!==JSON.stringify(P.cats))setDoc(doc(db,'meta','cats'),S.cats).catch(err);
  }catch(e){err(e);return false}
  return true;
 }
@@ -136,7 +137,7 @@ function readFile(f){return new Promise((res,rej)=>{
  if(!f)return res(null);
  const r=new FileReader();
  if(f.type.startsWith('image/')){
-  r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,1000/(im.width,im.height));const c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);res({name:f.name,data:c.toDataURL('image/jpeg',.65)})};im.onerror=()=>rej();im.src=r.result};
+  r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,1000/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);res({name:f.name,data:c.toDataURL('image/jpeg',.65)})};im.onerror=()=>rej();im.src=r.result};
  }else{
   if(f.size>600000){alert('ไฟล์ PDF ใหญ่เกิน 0.6 MB');return res(null)}
   r.onload=()=>res({name:f.name,data:r.result});
@@ -155,14 +156,14 @@ const cards=a=>{const i=sum(a,'in'),e=sum(a,'out');return `<div class="grid"><di
 const monthPick=()=>`<div class="top noprint"><div><label>เดือน</label><input type="month" value="${M}" onchange="setM(this.value)"></div></div>`;
 
 // ---- views ----
-const TABS=[['home','ภาพรวม'],['tx','รายรับ-รายจ่าย'],['dues','Support Project'],['rep','รายงาน'],['doc','สเตจเมนต์'],['set','ตั้งค่า']];
+const TABS=[['home','ภาพรวม'],['tx','รายรับ-รายจ่าย'],['dues','Support Project'],['note','โน้ต'],['rep','รายงาน'],['doc','สเตจเมนต์'],['set','ตั้งค่า']];
 function R(){
  $('#org').textContent=S.org;
  if(!ROLE){$('#nav').innerHTML='';$('#who').textContent=auth.currentUser?auth.currentUser.email:'';$('#v').innerHTML=roleChecked?NOACC:'<div class="empty">กำลังโหลด...</div>';return}
  if(T==='set'&&!ADMIN())T='home';
  $('#who').textContent=auth.currentUser.email+' ('+(ADMIN()?'Admin':'Member')+')';
  $('#nav').innerHTML=TABS.filter(t=>t[0]!=='set'||ADMIN()).map(([k,n])=>`<button class="${T===k?'on':''}" onclick="setT('${k}')">${n}</button>`).join('');
- $('#v').innerHTML=({home:vHome,tx:vTx,dues:vDues,rep:vRep,doc:vDoc,set:vSet})[T]();
+ $('#v').innerHTML=({home:vHome,tx:vTx,dues:vDues,note:vNote,rep:vRep,doc:vDoc,set:vSet})[T]();
 }
 function banks(){return S.banks.length?S.banks.map(b=>`<div class="row"><div class="g1"><b>${esc(b.bank)}</b> ${esc(b.no)}<small>ชื่อบัญชี ${esc(b.name)}</small></div><button class="btn g s" onclick="cp('${esc(b.no)}',this)">คัดลอกเลขบัญชี</button></div>`).join(''):'<div class="empty">ยังไม่มีบัญชีรับโอน เพิ่มได้ที่หน้าตั้งค่า</div>'}
 function cp(t,b){try{navigator.clipboard.writeText(t)}catch(e){}b.textContent='คัดลอกแล้ว';setTimeout(()=>b.textContent='คัดลอกเลขบัญชี',1200)}
@@ -173,7 +174,7 @@ function vHome(){
  <div class="card"><h2>บัญชีสำหรับโอนเงิน</h2>${banks()}</div>`;
 }
 function vTx(){
- const cats=TYPE==='in'?CI:CE;
+ const cats=S.cats[TYPE];
  const list=inM(M).sort((a,b)=>b.date.localeCompare(a.date));
  return `<div class="card"><h2>บันทึกรายการ</h2>
  <div class="seg" style="margin-bottom:10px"><button class="btn ${TYPE==='in'?'':'g'}" onclick="setType('in')">รายรับ</button><button class="btn ${TYPE==='out'?'':'g'}" onclick="setType('out')">รายจ่าย</button></div>
@@ -256,7 +257,7 @@ function vSet(){
  <div class="card"><h2>บัญชีสำหรับโอนเงิน</h2>
  ${S.banks.map(b=>`${bankRow(b)}`).join('')||'<div class="empty">ยังไม่มีบัญชี</div>'}
  <div class="f" style="margin-top:10px"><div><label>ธนาคาร / PromptPay</label><input id="bb" placeholder="เช่น กสิกรไทย"></div><div><label>เลขบัญชี</label><input id="bn" inputmode="numeric"></div><div><label>ชื่อบัญชี</label><input id="bm"></div><button class="btn" onclick="addBank()">เพิ่มบัญชี</button></div></div>
- ${vClean()}<div class="card"><h2>ผู้ใช้และสิทธิ์</h2><p class="mu" style="margin-top:0;font-size:13px">สร้างบัญชีล็อกอินที่ Firebase Console → Authentication ก่อน แล้วกำหนดสิทธิ์ที่นี่ด้วยอีเมลเดียวกัน Member เพิ่มข้อมูลได้แต่ลบและตั้งค่าไม่ได้ Admin ทำได้ทุกอย่าง</p>
+ ${vCats()}${vClean()}<div class="card"><h2>ผู้ใช้และสิทธิ์</h2><p class="mu" style="margin-top:0;font-size:13px">สร้างบัญชีล็อกอินที่ Firebase Console → Authentication ก่อน แล้วกำหนดสิทธิ์ที่นี่ด้วยอีเมลเดียวกัน Member เพิ่มข้อมูลได้แต่ลบและตั้งค่าไม่ได้ Admin ทำได้ทุกอย่าง</p>
  ${S.roles.map(r=>`<div class="row"><div class="g1">${esc(r.id)}</div><span class="tag">${r.role==='admin'?'Admin':'Member'}</span><button class="btn g s" onclick="togRole('${esc(r.id)}')">เปลี่ยนเป็น ${r.role==='admin'?'Member':'Admin'}</button><button class="btn g s" onclick="delRole('${esc(r.id)}')">ลบ</button></div>`).join('')||'<div class="empty">ยังไม่มีผู้ใช้</div>'}
  <div class="f" style="margin-top:10px"><div><label>อีเมล</label><input id="re" type="email"></div><div><label>สิทธิ์</label><select id="rr"><option value="member">Member</option><option value="admin">Admin</option></select></div><button class="btn" onclick="addRole()">เพิ่มสิทธิ์</button></div></div>
  <div class="card"><h2>บัญชีผู้ใช้</h2><p class="mu" style="margin-top:0">ข้อมูลทั้งหมดเก็บบน Firebase และใช้ร่วมกันทั้งทีม · เข้าสู่ระบบด้วย ${esc(auth.currentUser?auth.currentUser.email:'')}</p><button class="btn g" onclick="doLogout()">ออกจากระบบ</button></div>`;
@@ -276,6 +277,44 @@ function clearYear(y){
  S.tx.forEach(t=>{if(t.file&&t.date.startsWith(y))t.file=null});
  S.stm=S.stm.filter(x=>!x.month.startsWith(y));
  save();R();
+}
+let EN=null;
+function vNote(){
+ const l=[...S.notes].sort((a,b)=>(b.pin?1:0)-(a.pin?1:0)||(b.ts||0)-(a.ts||0));
+ return `<div class="card noprint"><h2>จดบันทึก</h2>
+ <div><label>หัวข้อ</label><input id="nt" placeholder="เช่น ประชุมทีม สิ่งที่ต้องจ่าย"></div>
+ <div style="margin-top:10px"><label>เนื้อหา</label><textarea id="nb" rows="4"></textarea></div>
+ <button class="btn" style="margin-top:10px" onclick="addNote()">บันทึกโน้ต</button></div>
+ <div class="card"><h2>โน้ตทั้งหมด (${l.length})</h2>${l.length?l.map(noteRow).join(''):'<div class="empty">ยังไม่มีโน้ต</div>'}</div>`;
+}
+function noteRow(n){
+ if(EN===n.id)return `<div style="padding:10px 0;border-bottom:1px solid var(--ln)"><label>หัวข้อ</label><input id="et" value="${esc(n.title)}"><label style="margin-top:8px">เนื้อหา</label><textarea id="eb" rows="4">${esc(n.body)}</textarea><div class="seg" style="margin-top:8px"><button class="btn" onclick="saveNote('${n.id}')">บันทึก</button><button class="btn g" onclick="setEN(null)">ยกเลิก</button></div></div>`;
+ return `<div class="row" style="align-items:flex-start;flex-wrap:wrap"><div class="g1"><b>${n.pin?'📌 ':''}${esc(n.title)}</b><small style="white-space:pre-wrap;overflow:visible;color:var(--tx)">${esc(n.body)}</small><small>${esc(n.date||'')} · ${esc(n.by||'')}</small></div><button class="btn g s" onclick="pinNote('${n.id}')">${n.pin?'เลิกปักหมุด':'ปักหมุด'}</button><button class="btn g s" onclick="setEN('${n.id}')">แก้ไข</button>${ADMIN()?`<button class="btn g s" onclick="delNote('${n.id}')">ลบ</button>`:''}</div>`;
+}
+function addNote(){
+ const t=$('#nt').value.trim(),b=$('#nb').value.trim();
+ if(!t&&!b){alert('กรุณาพิมพ์หัวข้อหรือเนื้อหา');return}
+ S.notes.push({id:uid(),title:t||'(ไม่มีหัวข้อ)',body:b,date:now.toISOString().slice(0,10),ts:Date.now(),by:auth.currentUser.email,pin:false});
+ save();R();
+}
+function saveNote(id){const n=S.notes.find(x=>x.id===id);n.title=$('#et').value.trim()||n.title;n.body=$('#eb').value.trim();EN=null;save();R()}
+function pinNote(id){const n=S.notes.find(x=>x.id===id);n.pin=!n.pin;save();R()}
+function delNote(id){if(!ADMIN()||!confirm('ลบโน้ตนี้?'))return;S.notes=S.notes.filter(n=>n.id!==id);save();R()}
+function setEN(id){EN=id;R()}
+function vCats(){
+ const blk=(t,label)=>`<div><h2 style="font-size:14px">${label}</h2>`+S.cats[t].map((c,i)=>`<div class="row"><div class="g1">${esc(c)}</div><button class="btn g s" onclick="renCat('${t}',${i})">เปลี่ยนชื่อ</button><button class="btn g s" onclick="delCat('${t}',${i})">ลบ</button></div>`).join('')+`<div class="f" style="margin-top:8px"><input id="nc_${t}" placeholder="หมวดหมู่ใหม่"><button class="btn" onclick="addCat('${t}')">เพิ่ม</button></div></div>`;
+ return `<div class="card"><h2>หมวดหมู่รายรับ-รายจ่าย</h2><p class="mu" style="margin-top:0;font-size:13px">ใช้เป็นตัวเลือกในฟอร์มบันทึกรายการ การเปลี่ยนชื่อจะอัปเดตรายการเก่าที่ใช้หมวดนั้นด้วย ส่วนการลบไม่กระทบรายการเก่า</p><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">${blk('in','รายรับ')}${blk('out','รายจ่าย')}</div></div>`;
+}
+function addCat(t){const v=$('#nc_'+t).value.trim();if(!v)return;if(S.cats[t].includes(v)){alert('มีหมวดหมู่นี้แล้ว');return}S.cats[t].push(v);save();R()}
+function renCat(t,i){
+ const old=S.cats[t][i],v=(prompt('ชื่อใหม่ของหมวดหมู่',old)||'').trim();
+ if(!v||v===old)return;if(S.cats[t].includes(v)){alert('มีหมวดหมู่นี้แล้ว');return}
+ S.cats[t][i]=v;S.tx.forEach(x=>{if(x.type===t&&x.cat===old)x.cat=v});save();R();
+}
+function delCat(t,i){
+ if(S.cats[t].length<=1){alert('ต้องเหลืออย่างน้อย 1 หมวดหมู่');return}
+ if(!confirm('ลบหมวดหมู่ “'+S.cats[t][i]+'”? รายการเก่าที่ใช้หมวดนี้ยังคงอยู่'))return;
+ S.cats[t].splice(i,1);save();R();
 }
 let EB=null;
 function bankRow(b){
@@ -298,7 +337,7 @@ $('#lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 function addRole(){const e=$('#re').value.trim().toLowerCase();if(!e)return;S.roles=S.roles.filter(r=>r.id!==e);S.roles.push({id:e,role:$('#rr').value});save();R()}
 function togRole(id){if(id===me()){alert('ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้');return}const r=S.roles.find(x=>x.id===id);r.role=r.role==='admin'?'member':'admin';save();R()}
 function delRole(id){if(id===me()){alert('ไม่สามารถลบสิทธิ์ของตัวเองได้');return}if(!confirm('ลบสิทธิ์ผู้ใช้นี้?'))return;S.roles=S.roles.filter(r=>r.id!==id);save();R()}
-Object.assign(window,{clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
+Object.assign(window,{addNote,saveNote,pinNote,delNote,setEN,addCat,renCat,delCat,clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
 const RR=()=>{const a=document.activeElement;if(a&&['INPUT','SELECT','TEXTAREA'].includes(a.tagName)&&$('#v').contains(a))return;R()};
 let unsubs=[];
 function listen(){
@@ -306,6 +345,7 @@ function listen(){
  for(const c of COLS)if(c!=='roles'||ADMIN())unsubs.push(onSnapshot(collection(db,c),q=>{S[c]=q.docs.map(d=>d.data());P[c]=clone(S[c]);RR()},err));
  unsubs.push(onSnapshot(collection(db,'dues'),q=>{const o={};q.docs.forEach(d=>o[d.id]=d.data());S.dues=o;P.dues=clone(o);RR()},err));
  unsubs.push(onSnapshot(doc(db,'meta','org'),q=>{S.org=q.exists()?q.data().name:def().org;P.org=S.org;RR()},err));
+ unsubs.push(onSnapshot(doc(db,'meta','cats'),q=>{const d=q.exists()?q.data():{};S.cats={in:d.in&&d.in.length?d.in:[...CI],out:d.out&&d.out.length?d.out:[...CE]};P.cats=clone(S.cats);RR()},err));
 }
 let roleUnsub=null;
 onAuthStateChanged(auth,u=>{
