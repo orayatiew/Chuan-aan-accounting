@@ -4,6 +4,7 @@
 import { pathToFileURL } from 'node:url';
 
 const DEFAULT_FEE = 500; // ใช้เมื่อสมาชิกไม่ได้ตั้งยอดไว้
+const MENTION_EVERYONE = true; // true = แท็ก @everyone เมื่อมีคนค้างจ่าย (ตั้งเป็น false เพื่อปิด)
 const TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const pad = n => String(n).padStart(2, '0');
 const label = (y, m) => `${TH[m - 1]} ${y + 543}`;
@@ -29,6 +30,7 @@ export function buildMessage({ mode, y, m, org, members, paid, banks }) {
   const list = unpaid.map(x => `• ${x.name} — ${baht(feeOf(x))} บาท`).join('\n');
   const total = unpaid.reduce((s, x) => s + feeOf(x), 0);
   const L = [];
+  if (MENTION_EVERYONE && unpaid.length) L.push('@everyone');
   if (mode === 'pay') {
     L.push(`📣 **${org}** — ถึงกำหนดชำระ Support Project ประจำเดือน${label(y, m)}`);
     if (unpaid.length) L.push(`ยังไม่ได้ชำระ ${unpaid.length} คน (รวม ${baht(total)} บาท):`, list);
@@ -64,7 +66,7 @@ async function main() {
     mode: d.mode, y: d.y, m: d.m, org: (og.data() || {}).name || 'ทีมของเรา',
     members, paid: du.data() || {}, banks: bk.docs.map(x => x.data()),
   });
-  const res = await fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'Support Project', content }) });
+  const res = await fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'Support Project', content, allowed_mentions: { parse: MENTION_EVERYONE ? ['everyone'] : [] } }) });
   if (!res.ok) throw new Error(`Discord ตอบกลับ ${res.status}`);
   console.log(`ส่งแจ้งเตือนแล้ว (${d.mode}, ${key})`);
 }
