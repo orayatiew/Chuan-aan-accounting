@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: 'งานที่จะรัน: reminder (เรียกเก็บเงิน) / announce (ประกาศ) / both'
+        description: 'งานที่จะรัน: ping (ทดสอบ Webhook) / reminder (เรียกเก็บเงิน) / announce (ประกาศ) / both'
         required: false
         default: 'both'
       mode:
@@ -29,7 +29,18 @@ jobs:
         with:
           node-version: 20
       - run: npm install --no-save firebase-admin@12
-      - run: node scripts/discord-notify.mjs
+      - name: Run notify script
+        run: |
+          # หาไฟล์สคริปต์รวมจาก "เนื้อหา" ไม่ผูกกับชื่อไฟล์หรือโฟลเดอร์ (อยู่ที่ราก/ใน scripts/ ชื่ออะไรก็เจอ)
+          FILE=$(grep -rl --include='*.mjs' --exclude-dir=node_modules --exclude-dir=.git 'export async function runReminder' . | head -1)
+          if [ -z "$FILE" ]; then
+            echo "::error::ไม่พบไฟล์สคริปต์รวม (discord-notify.mjs) ใน repo — ให้เพิ่มไฟล์นี้ก่อน"
+            echo "ไฟล์ทั้งหมดใน repo ตอนนี้:"
+            find . -path ./node_modules -prune -o -path ./.git -prune -o -type f -print
+            exit 1
+          fi
+          echo "ใช้ไฟล์: $FILE"
+          node "$FILE"
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
