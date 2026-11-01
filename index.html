@@ -100,10 +100,10 @@ const fmt=n=>Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximu
 const CI=['ค่าสมาชิก','เงินสนับสนุน','ขายสินค้า/บริการ','อื่นๆ'];
 const CE=['Claude','Figma','เงินเดือน/ค่าแรง','วัสดุอุปกรณ์','เดินทาง','อาหาร/เครื่องดื่ม','อื่นๆ'];
 const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-const def=()=>({org:'Chuan Aan Accouting',members:[],banks:[],tx:[],dues:{},stm:[],roles:[],notes:[],cats:{in:[...CI],out:[...CE]}});
+const def=()=>({org:'Chuan Aan Accouting',members:[],banks:[],tx:[],dues:{},stm:[],roles:[],notes:[],announcements:[],cats:{in:[...CI],out:[...CE]}});
 let S=def();
-const COLS=['tx','members','banks','stm','roles','notes'];
-const freshP=()=>({tx:[],members:[],banks:[],stm:[],roles:[],notes:[],dues:{},org:def().org,cats:{in:[...CI],out:[...CE]}});
+const COLS=['tx','members','banks','stm','roles','notes','announcements'];
+const freshP=()=>({tx:[],members:[],banks:[],stm:[],roles:[],notes:[],announcements:[],dues:{},org:def().org,cats:{in:[...CI],out:[...CE]}});
 let P=freshP(),errShown=false,ROLE=null,roleChecked=false;
 const ADMIN=()=>ROLE==='admin';
 const me=()=>auth.currentUser.email.toLowerCase();
@@ -156,14 +156,14 @@ const cards=a=>{const i=sum(a,'in'),e=sum(a,'out');return `<div class="grid"><di
 const monthPick=()=>`<div class="top noprint"><div><label>เดือน</label><input type="month" value="${M}" onchange="setM(this.value)"></div></div>`;
 
 // ---- views ----
-const TABS=[['home','ภาพรวม'],['tx','รายรับ-รายจ่าย'],['dues','Support Project'],['note','โน้ต'],['rep','รายงาน'],['doc','สเตจเมนต์'],['set','ตั้งค่า']];
+const TABS=[['home','ภาพรวม'],['tx','รายรับ-รายจ่าย'],['dues','Support Project'],['ann','ประกาศ'],['note','โน้ต'],['rep','รายงาน'],['doc','สเตจเมนต์'],['set','ตั้งค่า']];
 function R(){
  $('#org').textContent=S.org;
  if(!ROLE){$('#nav').innerHTML='';$('#who').textContent=auth.currentUser?auth.currentUser.email:'';$('#v').innerHTML=roleChecked?NOACC:'<div class="empty">กำลังโหลด...</div>';return}
  if(T==='set'&&!ADMIN())T='home';
  $('#who').textContent=auth.currentUser.email+' ('+(ADMIN()?'Admin':'Member')+')';
  $('#nav').innerHTML=TABS.filter(t=>t[0]!=='set'||ADMIN()).map(([k,n])=>`<button class="${T===k?'on':''}" onclick="setT('${k}')">${n}</button>`).join('');
- $('#v').innerHTML=({home:vHome,tx:vTx,dues:vDues,note:vNote,rep:vRep,doc:vDoc,set:vSet})[T]();
+ $('#v').innerHTML=({home:vHome,tx:vTx,dues:vDues,ann:vAnn,note:vNote,rep:vRep,doc:vDoc,set:vSet})[T]();
 }
 function banks(){return S.banks.length?S.banks.map(b=>`<div class="row"><div class="g1"><b>${esc(b.bank)}</b> ${esc(b.no)}<small>ชื่อบัญชี ${esc(b.name)}</small></div><button class="btn g s" onclick="cp('${esc(b.no)}',this)">คัดลอกเลขบัญชี</button></div>`).join(''):'<div class="empty">ยังไม่มีบัญชีรับโอน เพิ่มได้ที่หน้าตั้งค่า</div>'}
 function cp(t,b){try{navigator.clipboard.writeText(t)}catch(e){}b.textContent='คัดลอกแล้ว';setTimeout(()=>b.textContent='คัดลอกเลขบัญชี',1200)}
@@ -278,6 +278,61 @@ function clearYear(y){
  S.stm=S.stm.filter(x=>!x.month.startsWith(y));
  save();R();
 }
+let EA=null;
+const ATAG={draft:['ฉบับร่าง',''],scheduled:['ตั้งเวลาแล้ว',''],sending:['กำลังส่ง',''],sent:['ส่งแล้ว','ok'],failed:['ส่งไม่สำเร็จ','no']};
+const fdt=ts=>new Date(ts).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',dateStyle:'medium',timeStyle:'short'});
+const tlocal=ts=>new Date(ts+7*3600e3).toISOString().slice(0,16);
+function vAnn(){
+ const a=EA?S.announcements.find(x=>x.id===EA):null;
+ const sel=new Set(a?a.participants||[]:[]),names=S.members.map(m=>m.name);
+ const extra=a?(a.participants||[]).filter(p=>!names.includes(p)).join(', '):'';
+ const l=[...S.announcements].sort((x,y)=>(y.createdAt||0)-(x.createdAt||0));
+ return `<div class="card noprint"><h2>${a?'แก้ไขประกาศ':'สร้างประกาศใหม่'}</h2>
+ <div><label>หัวข้อ (Subject)</label><input id="as" maxlength="200" value="${esc(a?a.subject:'')}"></div>
+ <div style="margin-top:10px"><label>รายละเอียด (Detail)</label><textarea id="ad" rows="5">${esc(a?a.detail:'')}</textarea></div>
+ <div style="margin-top:10px"><label>แนบรูป (ไม่บังคับ)</label><input id="ai" type="file" accept="image/*">${a&&a.image?`<label style="margin-top:6px;display:flex;gap:6px;align-items:center;color:var(--tx)"><input type="checkbox" id="adi" style="width:auto"> ลบรูปเดิม (${esc(a.image.name)})</label>`:''}</div>
+ <div style="margin-top:10px"><label>ผู้เข้าร่วม</label>
+ <div style="display:flex;flex-wrap:wrap;gap:6px 14px">${names.length?names.map(n=>`<label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--tx)"><input type="checkbox" class="apc" style="width:auto" value="${esc(n)}" ${sel.has(n)?'checked':''}> ${esc(n)}</label>`).join(''):'<span class="mu">ยังไม่มีรายชื่อสมาชิก (เพิ่มได้ที่ตั้งค่า) หรือพิมพ์ชื่อด้านล่าง</span>'}</div>
+ <button class="btn g s" style="margin-top:6px" onclick="annAll()">เลือกทั้งหมด</button>
+ <input id="ax" style="margin-top:8px" placeholder="เพิ่มชื่ออื่น คั่นด้วยเครื่องหมายจุลภาค เช่น คุณเอ, คุณบี" value="${esc(extra)}"></div>
+ <div class="f" style="margin-top:10px"><div><label>วันและเวลาที่ประกาศลง Discord (เวลาไทย)</label><input id="at" type="datetime-local" value="${a&&a.sendAtTs?tlocal(a.sendAtTs):''}"></div>
+ <label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--tx)"><input type="checkbox" id="am" style="width:auto" ${a&&a.mention?'checked':''}> แท็ก @everyone</label></div>
+ <div class="seg" style="margin-top:12px"><button class="btn g" onclick="saveAnn('draft')">บันทึกฉบับร่าง</button><button class="btn" onclick="saveAnn('scheduled')">บันทึกและตั้งเวลาส่ง</button>${a?'<button class="btn g" onclick="setEA(null)">ยกเลิก</button>':''}</div>
+ <p class="mu" style="font-size:13px;margin:8px 0 0">ระบบตรวจประกาศที่ถึงเวลาเป็นรอบ ๆ จึงอาจส่งช้ากว่าเวลาที่ตั้งไว้ได้ราว 30 นาที</p></div>
+ <div class="card"><h2>ประกาศทั้งหมด (${l.length})</h2>${l.length?l.map(annRow).join(''):'<div class="empty">ยังไม่มีประกาศ</div>'}</div>`;
+}
+function annRow(n){
+ const[tx,cl]=ATAG[n.status]||ATAG.draft,ps=n.participants||[],d=n.detail||'';
+ return `<div style="padding:12px 0;border-bottom:1px solid var(--ln)"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="flex:1;min-width:140px">${esc(n.subject)}</b><span class="tag ${cl}">${tx}</span></div>
+ <div class="mu" style="font-size:13px">${n.sendAtTs?'ลง Discord: '+fdt(n.sendAtTs):'ยังไม่ได้ตั้งเวลา'}${n.status==='sent'&&n.sentAt?' · ส่งเมื่อ '+fdt(n.sentAt):''}${n.mention?' · แท็ก @everyone':''}</div>
+ ${n.status==='failed'&&n.error?`<div class="exp" style="font-size:13px">สาเหตุ: ${esc(n.error)}</div>`:''}
+ <div style="white-space:pre-wrap;margin:6px 0">${esc(d.slice(0,300))}${d.length>300?'…':''}</div>
+ ${ps.length?`<div class="mu" style="font-size:13px">👥 ผู้เข้าร่วม ${ps.length} คน: ${ps.map(p=>esc(p)).join(', ')}</div>`:''}
+ <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${n.image?`<button class="btn g s" onclick="annImg('${n.id}')">ดูรูป</button>`:''}${n.status!=='sent'?`<button class="btn g s" onclick="setEA('${n.id}')">แก้ไข</button>`:''}${n.status==='scheduled'?`<button class="btn g s" onclick="annStatus('${n.id}','draft')">ยกเลิกการตั้งเวลา</button>`:''}${(n.status==='draft'||n.status==='failed')&&n.sendAtTs?`<button class="btn s" onclick="annStatus('${n.id}','scheduled')">ตั้งเวลาส่ง</button>`:''}${ADMIN()?`<button class="btn g s" onclick="delAnn('${n.id}')">ลบ</button>`:''}</div></div>`;
+}
+async function saveAnn(status){
+ const subject=$('#as').value.trim();if(!subject){alert('กรุณาใส่หัวข้อ');return}
+ const names=[...document.querySelectorAll('.apc:checked')].map(x=>x.value);
+ $('#ax').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(!names.includes(x))names.push(x)});
+ const tv=$('#at').value,sendAtTs=tv?new Date(tv+':00+07:00').getTime():null;
+ if(status==='scheduled'){
+  if(!sendAtTs){alert('กรุณาเลือกวันและเวลาที่จะประกาศ');return}
+  if(sendAtTs<Date.now()&&!confirm('เวลาที่เลือกผ่านไปแล้ว ระบบจะส่งในรอบตรวจถัดไป ยืนยัน?'))return;
+ }
+ const a=EA?S.announcements.find(x=>x.id===EA):null;
+ let image=a?a.image||null:null;
+ if(a&&$('#adi')&&$('#adi').checked)image=null;
+ const f=$('#ai').files[0];
+ if(f){if(!f.type.startsWith('image/')){alert('แนบได้เฉพาะรูปภาพ');return}try{image=await readFile(f)}catch(e){alert('อ่านรูปไม่ได้');return}}
+ const o={subject,detail:$('#ad').value.trim(),image,participants:names,mention:$('#am').checked,sendAtTs,status,error:null};
+ if(a)Object.assign(a,o);else S.announcements.push({id:uid(),...o,createdAt:Date.now(),createdBy:auth.currentUser.email,sentAt:null});
+ EA=null;save();R();
+}
+function annStatus(id,st){const a=S.announcements.find(x=>x.id===id);if(!a)return;a.status=st;a.error=null;save();R()}
+function annAll(){document.querySelectorAll('.apc').forEach(x=>x.checked=true)}
+function setEA(id){EA=id;R()}
+function delAnn(id){if(!ADMIN()||!confirm('ลบประกาศนี้?'))return;S.announcements=S.announcements.filter(x=>x.id!==id);save();R()}
+function annImg(id){const a=S.announcements.find(x=>x.id===id);if(!a||!a.image)return;const m=$('#modal');m.innerHTML='<img alt="'+esc(a.image.name)+'" src="'+a.image.data+'">';m.style.display='flex'}
 let EN=null;
 function vNote(){
  const l=[...S.notes].sort((a,b)=>(b.pin?1:0)-(a.pin?1:0)||(b.ts||0)-(a.ts||0));
@@ -337,7 +392,7 @@ $('#lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 function addRole(){const e=$('#re').value.trim().toLowerCase();if(!e)return;S.roles=S.roles.filter(r=>r.id!==e);S.roles.push({id:e,role:$('#rr').value});save();R()}
 function togRole(id){if(id===me()){alert('ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้');return}const r=S.roles.find(x=>x.id===id);r.role=r.role==='admin'?'member':'admin';save();R()}
 function delRole(id){if(id===me()){alert('ไม่สามารถลบสิทธิ์ของตัวเองได้');return}if(!confirm('ลบสิทธิ์ผู้ใช้นี้?'))return;S.roles=S.roles.filter(r=>r.id!==id);save();R()}
-Object.assign(window,{addNote,saveNote,pinNote,delNote,setEN,addCat,renCat,delCat,clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
+Object.assign(window,{saveAnn,annStatus,annAll,setEA,delAnn,annImg,addNote,saveNote,pinNote,delNote,setEN,addCat,renCat,delCat,clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
 const RR=()=>{const a=document.activeElement;if(a&&['INPUT','SELECT','TEXTAREA'].includes(a.tagName)&&$('#v').contains(a))return;R()};
 let unsubs=[];
 function listen(){
