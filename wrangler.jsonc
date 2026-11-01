@@ -1,0 +1,12 @@
+{
+  // ชื่อ "name" ต้องตรงกับชื่อโปรเจกต์ใน Cloudflare (Workers & Pages) ที่ deploy เว็บนี้อยู่
+  "name": "chuan-aan-accounting",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "keep_vars": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  }
+}
