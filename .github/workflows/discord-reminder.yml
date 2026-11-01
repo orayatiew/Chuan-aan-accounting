@@ -1,18 +1,27 @@
-name: Discord announcements
+name: Discord notify
 on:
   schedule:
-    - cron: '7,37 * * * *'   # ตรวจทุก 30 นาที (นาทีที่ 7 และ 37 ของทุกชั่วโมง)
+    - cron: '0 2 * * *'     # 09:00 เวลาไทย ทุกวัน → แจ้งเตือนเรียกเก็บเงิน (ส่งจริงเฉพาะวันที่ 30 และวันที่ 1)
+    - cron: '7,37 * * * *'  # ทุก 30 นาที → ตรวจและส่งประกาศที่ถึงเวลา
   workflow_dispatch:
     inputs:
+      task:
+        description: 'งานที่จะรัน: reminder (เรียกเก็บเงิน) / announce (ประกาศ) / both'
+        required: false
+        default: 'both'
+      mode:
+        description: 'ทดสอบเรียกเก็บเงิน: pay หรือ unpaid (เว้นว่าง = ตามวันที่จริง)'
+        required: false
+        default: ''
       force_all:
-        description: 'true = ส่งทุกประกาศที่ตั้งเวลาไว้ทันที ไม่รอถึงเวลา (ใช้ทดสอบ)'
+        description: 'ทดสอบประกาศ: true = ส่งทุกประกาศที่ตั้งเวลาไว้ทันที'
         required: false
         default: 'false'
 concurrency:
-  group: discord-announce
+  group: discord-notify
   cancel-in-progress: false
 jobs:
-  announce:
+  notify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,8 +29,12 @@ jobs:
         with:
           node-version: 20
       - run: npm install --no-save firebase-admin@12
-      - run: node scripts/discord-announce.mjs
+      - run: node scripts/discord-notify.mjs
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_WEBHOOK_ANNOUNCE: ${{ secrets.DISCORD_WEBHOOK_ANNOUNCE }}
+          SCHEDULE: ${{ github.event.schedule }}
+          TASK: ${{ github.event.inputs.task }}
+          MODE: ${{ github.event.inputs.mode }}
           FORCE_ALL: ${{ github.event.inputs.force_all }}
