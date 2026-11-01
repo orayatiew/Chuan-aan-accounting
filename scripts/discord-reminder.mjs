@@ -1,16 +1,90 @@
-// ส่งประกาศที่ตั้งเวลาไว้ในเว็บ เข้า Discord อีกห้องหนึ่ง (แยกจากห้องบัญชี)
-// อ่านคอลเลกชัน announcements แล้วส่งเฉพาะที่ status = scheduled และถึงเวลาแล้ว
-// สคริปต์นี้แก้ข้อมูลเฉพาะสถานะของประกาศที่ส่ง (sending → sent / failed) ไม่แตะข้อมูลบัญชี
+// สคริปต์เดียวทำ 2 งาน ส่งเข้า Discord
+//  1) reminder  : แจ้งเตือนเรียกเก็บเงิน Support Project (อ่านข้อมูลอย่างเดียว)
+//       - วันที่ 30 ของเดือน (เดือนสั้นกว่า 30 วันใช้วันสุดท้าย): แจ้งชำระ + รายชื่อคนที่ยังไม่จ่าย
+//       - วันที่ 1 ของเดือน: แจ้งรายชื่อคนที่ยังไม่ได้จ่ายของ "เดือนที่แล้ว"
+//  2) announce  : ส่งประกาศที่ตั้งเวลาไว้ในเว็บ ไปห้องประกาศ (แก้เฉพาะสถานะของประกาศที่ส่ง)
+// Secrets ที่ใช้: FIREBASE_SERVICE_ACCOUNT, DISCORD_WEBHOOK_URL (ห้องบัญชี), DISCORD_WEBHOOK_ANNOUNCE (ห้องประกาศ)
 import { pathToFileURL } from 'node:url';
 
-const COLOR = 0x472a99;
+// ---------- ตั้งค่า ----------
+const DEFAULT_FEE = 500;          // ใช้เมื่อสมาชิกไม่ได้ตั้งยอดไว้
+const MENTION_EVERYONE = true;    // แจ้งเตือนเรียกเก็บเงิน: แท็ก @everyone เมื่อมีคนค้างจ่าย
+const EMBED_COLOR = 0x472a99;
+const REMINDER_CRON = '0 2 * * *'; // ต้องตรงกับ cron ของงานแจ้งเตือนใน workflow
+
+// ---------- ตัวช่วย ----------
+const TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const pad = n => String(n).padStart(2, '0');
+const label = (y, m) => `${TH[m - 1]} ${y + 543}`;
+const baht = n => Number(n).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+const feeOf = x => (+x.fee > 0 ? +x.fee : DEFAULT_FEE);
 const cut = (s, n) => (String(s || '').length > n ? String(s).slice(0, n - 1) + '…' : String(s || ''));
 
+// ---------- 1) แจ้งเตือนเรียกเก็บเงิน ----------
+export const bangkokToday = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
+export function decide(todayStr, force) {
+  const [Y, Mo, D] = todayStr.split('-').map(Number);
+  const prev = Mo === 1 ? { y: Y - 1, m: 12 } : { y: Y, m: Mo - 1 };
+  if (force === 'pay') return { mode: 'pay', y: Y, m: Mo };
+  if (force === 'unpaid') return { mode: 'unpaid', ...prev };
+  const payDay = Math.min(30, new Date(Y, Mo, 0).getDate());
+  if (D === payDay) return { mode: 'pay', y: Y, m: Mo };
+  if (D === 1) return { mode: 'unpaid', ...prev };
+  return null;
+}
+
+export function buildMessage({ mode, y, m, org, members, paid, banks }) {
+  const unpaid = members.filter(x => !paid[x.id]);
+  const list = unpaid.map(x => `• ${x.name} — ${baht(feeOf(x))} บาท`).join('\n');
+  const total = unpaid.reduce((s, x) => s + feeOf(x), 0);
+  const L = [];
+  if (MENTION_EVERYONE && unpaid.length) L.push('@everyone');
+  if (mode === 'pay') {
+    L.push(`📣 **${org}** — ถึงกำหนดชำระ Support Project ประจำเดือน${label(y, m)}`);
+    if (unpaid.length) L.push(`ยังไม่ได้ชำระ ${unpaid.length} คน (รวม ${baht(total)} บาท):`, list);
+    else L.push('ทุกคนชำระครบแล้ว ✅ ขอบคุณทุกคนครับ');
+  } else {
+    L.push(`⏰ **${org}** — แจ้งเตือนผู้ที่ยังไม่ได้ชำระ Support Project ประจำเดือน${label(y, m)}`);
+    if (unpaid.length) L.push(`ยังค้างชำระ ${unpaid.length} คน (รวม ${baht(total)} บาท):`, list);
+    else L.push('ทุกคนชำระครบแล้ว ✅');
+  }
+  if (unpaid.length && banks.length) {
+    L.push('', '💳 โอนเข้าบัญชี:', ...banks.map(b => `• ${b.bank} ${b.no} (${b.name})`), 'โอนแล้วแนบสลิปในเว็บบัญชีได้เลย');
+  }
+  return L.join('\n').slice(0, 1900);
+}
+
+export async function runReminder({ db, hook, today, force }) {
+  const d = decide(today, force || '');
+  if (!d) { console.log(`[เรียกเก็บเงิน] วันนี้ (${today}) ไม่ใช่วันแจ้งเตือน`); return; }
+  if (!hook) throw new Error('ยังไม่ได้ตั้งค่า secret DISCORD_WEBHOOK_URL (ห้องแจ้งเตือนบัญชี)');
+  const key = `${d.y}-${pad(d.m)}`;
+  const [mem, bk, du, og] = await Promise.all([
+    db.collection('members').get(), db.collection('banks').get(),
+    db.doc(`dues/${key}`).get(), db.doc('meta/org').get(),
+  ]);
+  const members = mem.docs.map(x => x.data()).sort((a, b) => String(a.name).localeCompare(String(b.name), 'th'));
+  if (!members.length) { console.log('[เรียกเก็บเงิน] ยังไม่มีสมาชิก'); return; }
+  const content = buildMessage({
+    mode: d.mode, y: d.y, m: d.m, org: (og.data() || {}).name || 'ทีมของเรา',
+    members, paid: du.data() || {}, banks: bk.docs.map(x => x.data()),
+  });
+  const res = await fetch(hook, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'Support Project', content, allowed_mentions: { parse: MENTION_EVERYONE ? ['everyone'] : [] } }),
+  });
+  if (!res.ok) throw new Error(`Discord ตอบกลับ ${res.status}`);
+  console.log(`[เรียกเก็บเงิน] ส่งแล้ว (${d.mode}, ${key})`);
+}
+
+// ---------- 2) ประกาศ ----------
 export function buildAnnouncement(a, org) {
   const embed = {
     title: cut(a.subject, 256),
     description: cut(a.detail, 4000) || undefined,
-    color: COLOR,
+    color: EMBED_COLOR,
     footer: { text: `${org || 'ประกาศ'} · โดย ${a.createdBy || '-'}` },
   };
   const ps = a.participants || [];
@@ -28,7 +102,7 @@ export function buildAnnouncement(a, org) {
   };
 }
 
-export async function postToDiscord(hook, a, org) {
+export async function postAnnouncement(hook, a, org) {
   const payload = buildAnnouncement(a, org);
   let res;
   if (a.image && a.image.data) {
@@ -44,18 +118,12 @@ export async function postToDiscord(hook, a, org) {
   if (!res.ok) throw new Error(`Discord ตอบกลับ ${res.status} ${cut(await res.text(), 150)}`);
 }
 
-async function main() {
-  const { default: admin } = await import('firebase-admin');
-  const hook = process.env.DISCORD_WEBHOOK_ANNOUNCE;
-  if (!hook || !process.env.FIREBASE_SERVICE_ACCOUNT) throw new Error('ยังไม่ได้ตั้งค่า secrets (FIREBASE_SERVICE_ACCOUNT, DISCORD_WEBHOOK_ANNOUNCE)');
-  const forceAll = (process.env.FORCE_ALL || '').trim() === 'true';
-  admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
-  const db = admin.firestore();
+export async function runAnnounce({ db, hook, forceAll, now = Date.now() }) {
   const snap = await db.collection('announcements').where('status', '==', 'scheduled').get();
-  const now = Date.now();
   const due = snap.docs.filter(d => forceAll || (Number(d.data().sendAtTs) || 0) <= now);
-  console.log(`ประกาศที่ตั้งเวลาไว้ ${snap.size} รายการ ถึงเวลาแล้ว ${due.length} รายการ`);
+  console.log(`[ประกาศ] ตั้งเวลาไว้ ${snap.size} รายการ ถึงเวลาแล้ว ${due.length} รายการ`);
   if (!due.length) return;
+  if (!hook) throw new Error('ยังไม่ได้ตั้งค่า secret DISCORD_WEBHOOK_ANNOUNCE (ห้องประกาศ)');
   const org = ((await db.doc('meta/org').get()).data() || {}).name;
   let failed = 0;
   for (const d of due) {
@@ -68,14 +136,42 @@ async function main() {
     });
     if (!a) continue;
     try {
-      await postToDiscord(hook, a, org);
+      await postAnnouncement(hook, a, org);
       await d.ref.update({ status: 'sent', sentAt: Date.now(), error: null });
-      console.log(`ส่งแล้ว: ${a.subject}`);
+      console.log(`[ประกาศ] ส่งแล้ว: ${a.subject}`);
     } catch (e) {
       failed++;
       await d.ref.update({ status: 'failed', error: cut(e.message, 300) });
-      console.error(`ส่งไม่สำเร็จ: ${a.subject} — ${e.message}`);
+      console.error(`[ประกาศ] ส่งไม่สำเร็จ: ${a.subject} — ${e.message}`);
     }
+  }
+  if (failed) throw new Error(`ส่งประกาศไม่สำเร็จ ${failed} รายการ`);
+}
+
+// ---------- ตัวรันหลัก ----------
+async function main() {
+  const env = process.env;
+  // ตั้งเวลา: เลือกงานตาม cron ที่เรียกมา / รันมือ: เลือกจากช่อง task (ค่าเริ่มต้น both)
+  let task = (env.TASK || '').trim();
+  if (!task) task = env.SCHEDULE ? (env.SCHEDULE === REMINDER_CRON ? 'reminder' : 'announce') : 'both';
+  const has = k => (env[k] ? 'ตั้งค่าแล้ว' : 'ยังไม่ได้ตั้งค่า');
+  console.log(`งานที่รัน: ${task}`);
+  console.log(`Secrets — FIREBASE_SERVICE_ACCOUNT: ${has('FIREBASE_SERVICE_ACCOUNT')}, DISCORD_WEBHOOK_URL: ${has('DISCORD_WEBHOOK_URL')}, DISCORD_WEBHOOK_ANNOUNCE: ${has('DISCORD_WEBHOOK_ANNOUNCE')}`);
+  if (!['reminder', 'announce', 'both'].includes(task)) throw new Error(`task ไม่ถูกต้อง: ${task} (ใช้ reminder, announce หรือ both)`);
+  if (!env.FIREBASE_SERVICE_ACCOUNT) throw new Error('ยังไม่ได้ตั้งค่า secret FIREBASE_SERVICE_ACCOUNT');
+
+  const { default: admin } = await import('firebase-admin');
+  admin.initializeApp({ credential: admin.credential.cert(JSON.parse(env.FIREBASE_SERVICE_ACCOUNT)) });
+  const db = admin.firestore();
+
+  let failed = false;
+  if (task === 'reminder' || task === 'both') {
+    try { await runReminder({ db, hook: env.DISCORD_WEBHOOK_URL, today: bangkokToday(), force: (env.MODE || '').trim() }); }
+    catch (e) { failed = true; console.error('[เรียกเก็บเงิน] ล้มเหลว:', e.message); }
+  }
+  if (task === 'announce' || task === 'both') {
+    try { await runAnnounce({ db, hook: env.DISCORD_WEBHOOK_ANNOUNCE, forceAll: (env.FORCE_ALL || '').trim() === 'true' }); }
+    catch (e) { failed = true; console.error('[ประกาศ] ล้มเหลว:', e.message); }
   }
   if (failed) process.exitCode = 1;
 }
