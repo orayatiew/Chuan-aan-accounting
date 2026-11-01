@@ -1,15 +1,18 @@
-name: Discord reminder
+name: Discord announcements
 on:
   schedule:
-    - cron: '0 2 * * *'   # ทุกวัน 09:00 เวลาไทย (สคริปต์เลือกส่งเฉพาะวันที่ 30 และวันที่ 1)
+    - cron: '7,37 * * * *'   # ตรวจทุก 30 นาที (นาทีที่ 7 และ 37 ของทุกชั่วโมง)
   workflow_dispatch:
     inputs:
-      mode:
-        description: 'ทดสอบ: pay หรือ unpaid (เว้นว่าง = ตามวันที่จริง)'
+      force_all:
+        description: 'true = ส่งทุกประกาศที่ตั้งเวลาไว้ทันที ไม่รอถึงเวลา (ใช้ทดสอบ)'
         required: false
-        default: ''
+        default: 'false'
+concurrency:
+  group: discord-announce
+  cancel-in-progress: false
 jobs:
-  remind:
+  announce:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,8 +20,8 @@ jobs:
         with:
           node-version: 20
       - run: npm install --no-save firebase-admin@12
-      - run: node scripts/discord-reminder.mjs
+      - run: node scripts/discord-announce.mjs
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          FORCE_MODE: ${{ github.event.inputs.mode }}
+          DISCORD_WEBHOOK_ANNOUNCE: ${{ secrets.DISCORD_WEBHOOK_ANNOUNCE }}
+          FORCE_ALL: ${{ github.event.inputs.force_all }}
