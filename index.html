@@ -298,7 +298,7 @@ function vAnn(){
  <div class="f" style="margin-top:10px"><div><label>วันและเวลาที่ประกาศลง Discord (เวลาไทย)</label><input id="at" type="datetime-local" value="${a&&a.sendAtTs?tlocal(a.sendAtTs):''}"></div>
  <label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--tx)"><input type="checkbox" id="am" style="width:auto" ${a&&a.mention?'checked':''}> แท็ก @everyone</label></div>
  <div class="seg" style="margin-top:12px"><button class="btn g" onclick="saveAnn('draft')">บันทึกฉบับร่าง</button><button class="btn" onclick="saveAnn('scheduled')">บันทึกและตั้งเวลาส่ง</button>${a?'<button class="btn g" onclick="setEA(null)">ยกเลิก</button>':''}</div>
- <p class="mu" style="font-size:13px;margin:8px 0 0">ระบบตรวจประกาศที่ถึงเวลาเป็นรอบ ๆ จึงอาจส่งช้ากว่าเวลาที่ตั้งไว้ได้ราว 30 นาที</p></div>
+ <p class="mu" style="font-size:13px;margin:8px 0 0">ระบบตรวจประกาศที่ถึงเวลาทุก 15 นาที (ช่วง 08:00-22:00 น.) จึงอาจส่งช้ากว่าเวลาที่ตั้งไว้เล็กน้อย ประกาศที่ตั้งเวลาไว้ช่วงดึกจะถูกส่งในรอบเช้า</p></div>
  <div class="card"><h2>ประกาศทั้งหมด (${l.length})</h2>${l.length?l.map(annRow).join(''):'<div class="empty">ยังไม่มีประกาศ</div>'}</div>`;
 }
 function annRow(n){
@@ -308,7 +308,24 @@ function annRow(n){
  ${n.status==='failed'&&n.error?`<div class="exp" style="font-size:13px">สาเหตุ: ${esc(n.error)}</div>`:''}
  <div style="white-space:pre-wrap;margin:6px 0">${esc(d.slice(0,300))}${d.length>300?'…':''}</div>
  ${ps.length?`<div class="mu" style="font-size:13px">👥 ผู้เข้าร่วม ${ps.length} คน: ${ps.map(p=>esc(p)).join(', ')}</div>`:''}
- <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${n.image?`<button class="btn g s" onclick="annImg('${n.id}')">ดูรูป</button>`:''}${n.status!=='sent'?`<button class="btn g s" onclick="setEA('${n.id}')">แก้ไข</button>`:''}${n.status==='scheduled'?`<button class="btn g s" onclick="annStatus('${n.id}','draft')">ยกเลิกการตั้งเวลา</button>`:''}${(n.status==='draft'||n.status==='failed')&&n.sendAtTs?`<button class="btn s" onclick="annStatus('${n.id}','scheduled')">ตั้งเวลาส่ง</button>`:''}${ADMIN()?`<button class="btn g s" onclick="delAnn('${n.id}')">ลบ</button>`:''}</div></div>`;
+ <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${ADMIN()&&n.status!=='sent'&&n.status!=='sending'?`<button class="btn s" onclick="sendNow('${n.id}',this)">ส่งทันที</button>`:''}${n.image?`<button class="btn g s" onclick="annImg('${n.id}')">ดูรูป</button>`:''}${n.status!=='sent'?`<button class="btn g s" onclick="setEA('${n.id}')">แก้ไข</button>`:''}${n.status==='scheduled'?`<button class="btn g s" onclick="annStatus('${n.id}','draft')">ยกเลิกการตั้งเวลา</button>`:''}${(n.status==='draft'||n.status==='failed')&&n.sendAtTs?`<button class="btn s" onclick="annStatus('${n.id}','scheduled')">ตั้งเวลาส่ง</button>`:''}${ADMIN()?`<button class="btn g s" onclick="delAnn('${n.id}')">ลบ</button>`:''}</div></div>`;
+}
+async function sendNow(id,btn){
+ if(!ADMIN())return;
+ const a=S.announcements.find(x=>x.id===id);if(!a)return;
+ if(!confirm('ส่งประกาศ “'+a.subject+'” ลง Discord ทันที'+(a.mention?' (แท็ก @everyone)':'')+' ?'))return;
+ if(btn){btn.disabled=true;btn.textContent='กำลังส่ง…'}
+ try{
+  const t=await auth.currentUser.getIdToken();
+  const r=await fetch('/api/send-announcement',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({id})});
+  if(r.status===404||r.status===405){
+   if(confirm('ยังไม่ได้เปิดใช้การส่งทันที (ฟังก์ชันบน Cloudflare)\nต้องการให้ส่งในรอบตรวจถัดไป (ภายใน 15 นาที) แทนหรือไม่?')){a.sendAtTs=Date.now();a.status='scheduled';a.error=null;save()}
+   return;
+  }
+  const j=await r.json().catch(()=>({}));
+  alert(r.ok&&j.ok?'ส่งประกาศลง Discord แล้ว':'ส่งไม่สำเร็จ: '+(j.error||r.status));
+ }catch(e){alert('ส่งไม่สำเร็จ: '+e.message)}
+ finally{R()}
 }
 async function saveAnn(status){
  const subject=$('#as').value.trim();if(!subject){alert('กรุณาใส่หัวข้อ');return}
@@ -392,7 +409,7 @@ $('#lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 function addRole(){const e=$('#re').value.trim().toLowerCase();if(!e)return;S.roles=S.roles.filter(r=>r.id!==e);S.roles.push({id:e,role:$('#rr').value});save();R()}
 function togRole(id){if(id===me()){alert('ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้');return}const r=S.roles.find(x=>x.id===id);r.role=r.role==='admin'?'member':'admin';save();R()}
 function delRole(id){if(id===me()){alert('ไม่สามารถลบสิทธิ์ของตัวเองได้');return}if(!confirm('ลบสิทธิ์ผู้ใช้นี้?'))return;S.roles=S.roles.filter(r=>r.id!==id);save();R()}
-Object.assign(window,{saveAnn,annStatus,annAll,setEA,delAnn,annImg,addNote,saveNote,pinNote,delNote,setEN,addCat,renCat,delCat,clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
+Object.assign(window,{sendNow,saveAnn,annStatus,annAll,setEA,delAnn,annImg,addNote,saveNote,pinNote,delNote,setEN,addCat,renCat,delCat,clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
 const RR=()=>{const a=document.activeElement;if(a&&['INPUT','SELECT','TEXTAREA'].includes(a.tagName)&&$('#v').contains(a))return;R()};
 let unsubs=[];
 function listen(){
