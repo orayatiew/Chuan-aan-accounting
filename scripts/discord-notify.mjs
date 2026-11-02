@@ -55,6 +55,7 @@ export function buildMessage({ mode, y, m, org, members, paid, banks }) {
     if (banks.length) L.push('', '💳 โอนเข้าบัญชี:', ...banks.map(b => `• ${b.bank} ${b.no} (${b.name})`));
     // ครอบลิงก์ด้วย <> เพื่อไม่ให้ Discord แสดงตัวอย่างลิงก์ขนาดใหญ่ (ยังกดได้ตามปกติ)
     L.push('', `📝 ชำระเงินแล้ว สามารถแนบสลิปแล้วทำเครื่องหมายว่าจ่ายแล้วได้ที่เว็บไซต์ <${SITE_URL}> ที่ Tab : Support Project`);
+    L.push('', `Username : member@chuanaan.com และ Password : m12345`);
   }
   return L.join('\n').slice(0, 1900);
 }
