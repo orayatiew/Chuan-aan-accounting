@@ -11,6 +11,7 @@ const DEFAULT_FEE = 500;          // ใช้เมื่อสมาชิก�
 const MENTION_EVERYONE = true;    // แจ้งเตือนเรียกเก็บเงิน: แท็ก @everyone เมื่อมีคนค้างจ่าย
 const EMBED_COLOR = 0x472a99;
 const REMINDER_CRON = '0 2 * * *'; // ต้องตรงกับ cron ของงานแจ้งเตือนใน workflow
+const SITE_URL = 'https://chuan-aan-accounting.dev-yo.workers.dev/'; // เว็บบัญชี (แสดงในข้อความแจ้งเตือน)
 
 // ---------- ตัวช่วย ----------
 const TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -50,8 +51,10 @@ export function buildMessage({ mode, y, m, org, members, paid, banks }) {
     if (unpaid.length) L.push(`ยังค้างชำระ ${unpaid.length} คน (รวม ${baht(total)} บาท):`, list);
     else L.push('ทุกคนชำระครบแล้ว ✅');
   }
-  if (unpaid.length && banks.length) {
-    L.push('', '💳 โอนเข้าบัญชี:', ...banks.map(b => `• ${b.bank} ${b.no} (${b.name})`), 'โอนแล้วแนบสลิปในเว็บบัญชีได้เลย');
+  if (unpaid.length) {
+    if (banks.length) L.push('', '💳 โอนเข้าบัญชี:', ...banks.map(b => `• ${b.bank} ${b.no} (${b.name})`));
+    // ครอบลิงก์ด้วย <> เพื่อไม่ให้ Discord แสดงตัวอย่างลิงก์ขนาดใหญ่ (ยังกดได้ตามปกติ)
+    L.push('', `📝 ชำระเงินแล้ว สามารถแนบสลิปแล้วทำเครื่องหมายว่าจ่ายแล้วได้ที่เว็บไซต์ <${SITE_URL}> ที่ Tab : Support Project`);
   }
   return L.join('\n').slice(0, 1900);
 }
