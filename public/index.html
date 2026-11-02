@@ -150,7 +150,9 @@ function openFile(id,kind){
 }
 
 // ---- calc ----
-const inM=m=>S.tx.filter(t=>t.date.startsWith(m));
+const per=t=>t.period||t.date.slice(0,7);
+const ymd=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const inM=m=>S.tx.filter(t=>per(t)===m);
 const sum=(a,t)=>a.filter(x=>x.type===t).reduce((s,x)=>s+ +x.amount,0);
 const cards=a=>{const i=sum(a,'in'),e=sum(a,'out');return `<div class="grid"><div class="sum i"><small>รายรับ</small><b class="inc">${fmt(i)}</b></div><div class="sum e"><small>รายจ่าย</small><b class="exp">${fmt(e)}</b></div><div class="sum b"><small>คงเหลือ</small><b>${fmt(i-e)}</b></div></div>`};
 const monthPick=()=>`<div class="top noprint"><div><label>เดือน</label><input type="month" value="${M}" onchange="setM(this.value)"></div></div>`;
@@ -178,21 +180,24 @@ function vTx(){
  const list=inM(M).sort((a,b)=>b.date.localeCompare(a.date));
  return `<div class="card"><h2>บันทึกรายการ</h2>
  <div class="seg" style="margin-bottom:10px"><button class="btn ${TYPE==='in'?'':'g'}" onclick="setType('in')">รายรับ</button><button class="btn ${TYPE==='out'?'':'g'}" onclick="setType('out')">รายจ่าย</button></div>
- <div class="f"><div><label>วันที่</label><input id="d" type="date" value="${now.toISOString().slice(0,10)}"></div>
+ <div class="f"><div><label>วันที่</label><input id="d" type="date" value="${ymd()}"></div>
+ <div><label>นับเข้ายอดเดือน (เว้นว่าง = เดือนของวันที่)</label><input id="pm" type="month"></div>
  <div><label>จำนวนเงิน (บาท)</label><input id="a" type="number" min="0" step="0.01" inputmode="decimal"></div>
  <div><label>หมวดหมู่</label><select id="c">${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
  <div><label>รายละเอียด</label><input id="n" placeholder="เช่น ค่าไฟเดือนนี้"></div>
  <div><label>${TYPE==='out'?'แนบสลิป / ใบเสร็จ':'แนบหลักฐาน (ถ้ามี)'}</label><input id="fl" type="file" accept="image/*,application/pdf"></div>
  <div><button class="btn" style="width:100%" onclick="addTx()">บันทึก${TYPE==='in'?'รายรับ':'รายจ่าย'}</button></div></div></div>
  ${monthPick()}${cards(list)}
- <div class="card" style="margin-top:12px"><h2>รายการเดือน ${mlabel(M)}</h2>${list.length?list.map(t=>`<div class="row"><div class="g1"><b>${esc(t.cat)}</b> <small>${t.date} ${esc(t.note)}</small></div>${t.file?`<button class="btn g s" onclick="openFile('${t.id}')">ดูสลิป</button>`:''}<span class="amt ${t.type==='in'?'inc':'exp'}">${t.type==='in'?'+':'-'}${fmt(t.amount)}</span>${ADMIN()?`<button class="btn g s" aria-label="ลบ" onclick="delTx('${t.id}')">ลบ</button>`:''}</div>`).join(''):'<div class="empty">ยังไม่มีรายการในเดือนนี้</div>'}</div>`;
+ <div class="card" style="margin-top:12px"><h2>รายการเดือน ${mlabel(M)}</h2>${list.length?list.map(t=>`<div class="row"><div class="g1"><b>${esc(t.cat)}</b> <small>${t.date} ${esc(t.note)}${t.period&&t.period!==t.date.slice(0,7)?' · นับเข้ายอดเดือน '+mlabel(t.period):''}</small></div>${t.file?`<button class="btn g s" onclick="openFile('${t.id}')">ดูสลิป</button>`:''}<span class="amt ${t.type==='in'?'inc':'exp'}">${t.type==='in'?'+':'-'}${fmt(t.amount)}</span>${ADMIN()?`<button class="btn g s" aria-label="ลบ" onclick="delTx('${t.id}')">ลบ</button>`:''}</div>`).join(''):'<div class="empty">ยังไม่มีรายการในเดือนนี้</div>'}</div>`;
 }
 async function addTx(){
- const a=+$('#a').value,d=$('#d').value;
+ const a=+$('#a').value,d=$('#d').value,pm=$('#pm').value;
  if(!(a>0)||!d){alert('กรุณากรอกวันที่และจำนวนเงิน');return}
  let file=null;try{file=await readFile($('#fl').files[0])}catch(e){alert('อ่านไฟล์ไม่ได้');return}
- S.tx.push({id:uid(),type:TYPE,date:d,amount:a,cat:$('#c').value,note:$('#n').value,file});
- if(save()){M=d.slice(0,7);R()}else S.tx.pop();
+ const t={id:uid(),type:TYPE,date:d,amount:a,cat:$('#c').value,note:$('#n').value,file};
+ if(pm&&pm!==d.slice(0,7))t.period=pm;
+ S.tx.push(t);
+ if(save()){M=per(t);R()}else S.tx.pop();
 }
 function delTx(id){if(!ADMIN())return;if(!confirm('ลบรายการนี้?'))return;S.tx=S.tx.filter(t=>t.id!==id);save();R()}
 function vDues(){
@@ -201,9 +206,10 @@ function vDues(){
  return monthPick()+`<div class="grid"><div class="sum i"><small>เก็บแล้ว (${paid.length}/${S.members.length} คน)</small><b class="inc">${fmt(got)}</b></div><div class="sum e"><small>ค้างชำระ</small><b class="exp">${fmt(all-got)}</b></div></div>
  <div class="card" style="margin-top:12px"><h2>สถานะการชำระ ${mlabel(M)}</h2>
  ${S.members.length?S.members.map(m=>`<div class="row" style="flex-wrap:wrap"><div class="g1" style="min-width:140px"><b>${esc(m.name)}</b><small>${D[m.id]?'ชำระเมื่อ '+D[m.id]:'ยังไม่ชำระ'}</small></div><span class="amt">${fmt(m.fee)}</span><span class="tag ${D[m.id]?'ok':'no'}">${D[m.id]?'ชำระแล้ว':'ค้าง'}</span>${dueAct(m,D)}</div>`).join(''):'<div class="empty">ยังไม่มีสมาชิก เพิ่มได้ที่หน้าตั้งค่า</div>'}
- <p class="mu" style="font-size:13px;margin:10px 0 0">แนบสลิปได้ก่อนกดทำเครื่องหมายว่าชำระ (ไม่บังคับ) ระบบจะบันทึกเป็นรายรับหมวด “ค่าสมาชิก” พร้อมสลิปให้อัตโนมัติ และดูสลิปได้ในหน้ารายรับ-รายจ่ายด้วย</p></div>
+ <p class="mu" style="font-size:13px;margin:10px 0 0">เลือกวันที่ชำระและแนบสลิปได้ก่อนกดทำเครื่องหมายว่าชำระ (สลิปไม่บังคับ) ระบบจะบันทึกเป็นรายรับหมวด “ค่าสมาชิก” พร้อมสลิปให้อัตโนมัติ ถ้าชำระช้ากว่าเดือนที่เรียกเก็บ (เช่น จ่ายเดือน ต.ค. ในเดือน พ.ย.) ยอดจะถูกนับเข้ารายรับของเดือนที่กำลังดูอยู่ ส่วนวันที่จริงยังแสดงไว้ ผู้ดูแลกดแก้วันที่ได้</p></div>
  <div class="card"><h2>โอนเงินเข้าบัญชี</h2>${banks()}</div>`;
 }
+const dateIn=id=>`<input type="date" id="dt_${id}" value="${ymd()}" aria-label="วันที่ชำระ" title="วันที่ชำระ" style="width:150px;padding:4px 8px;font-size:14px">`;
 const slipIn=id=>`<input type="file" id="sl_${id}" accept="image/*,application/pdf" aria-label="แนบสลิป" style="width:200px;font-size:12px;padding:4px">`;
 const dueTx=id=>S.tx.find(t=>t.id==='d_'+M+'_'+id);
 function dueAct(m,D){
@@ -211,8 +217,8 @@ function dueAct(m,D){
  if(D[m.id]){
   if(t&&t.file)h+=`<button class="btn g s" onclick="openFile('${t.id}')">ดูสลิป</button>`;
   else if(ADMIN())h+=slipIn(m.id)+`<button class="btn g s" onclick="attachSlip('${m.id}')">แนบสลิป</button>`;
-  if(ADMIN())h+=`<button class="btn g s" onclick="payTog('${m.id}')">ยกเลิก</button>`;
- }else h+=slipIn(m.id)+`<button class="btn s" onclick="payTog('${m.id}')">ทำเครื่องหมายว่าชำระ</button>`;
+  if(ADMIN())h+=`<button class="btn g s" onclick="editPayDate('${m.id}')">แก้วันที่</button><button class="btn g s" onclick="payTog('${m.id}')">ยกเลิก</button>`;
+ }else h+=dateIn(m.id)+slipIn(m.id)+`<button class="btn s" onclick="payTog('${m.id}')">ทำเครื่องหมายว่าชำระ</button>`;
  return h;
 }
 async function attachSlip(id){
@@ -224,7 +230,16 @@ async function attachSlip(id){
 async function payTog(id){if(!ADMIN()&&(S.dues[M]||{})[id])return;
  const m=S.members.find(x=>x.id===id),k='d_'+M+'_'+id;S.dues[M]=S.dues[M]||{};
  if(S.dues[M][id]){delete S.dues[M][id];S.tx=S.tx.filter(t=>t.id!==k)}
- else{let file=null;const inp=$('#sl_'+id);try{file=inp&&inp.files[0]?await readFile(inp.files[0]):null}catch(e){alert('อ่านไฟล์ไม่ได้');return}const d=now.toISOString().slice(0,10);S.dues[M][id]=d;S.tx.push({id:k,type:'in',date:d,amount:m.fee,cat:'ค่าสมาชิก',note:m.name+' '+mlabel(M),file})}
+ else{let file=null;const inp=$('#sl_'+id),dv=($('#dt_'+id)||{}).value||'';try{file=inp&&inp.files[0]?await readFile(inp.files[0]):null}catch(e){alert('อ่านไฟล์ไม่ได้');return}const d=/^\d{4}-\d{2}-\d{2}$/.test(dv)?dv:ymd();S.dues[M][id]=d;const t={id:k,type:'in',date:d,amount:m.fee,cat:'ค่าสมาชิก',note:m.name+' '+mlabel(M),file};if(d.slice(0,7)!==M)t.period=M;S.tx.push(t)}
+ save();R();
+}
+function editPayDate(id){
+ if(!ADMIN())return;const cur=(S.dues[M]||{})[id];if(!cur)return;
+ const v=(prompt('วันที่ชำระ (รูปแบบ ปปปป-ดด-วว เช่น '+ymd()+')',cur)||'').trim();
+ if(!v)return;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(v)||isNaN(new Date(v))){alert('รูปแบบวันที่ไม่ถูกต้อง');return}
+ S.dues[M][id]=v;
+ const t=dueTx(id);if(t){t.date=v;if(v.slice(0,7)!==M)t.period=M;else delete t.period}
  save();R();
 }
 function vRep(){
@@ -366,7 +381,7 @@ function noteRow(n){
 function addNote(){
  const t=$('#nt').value.trim(),b=$('#nb').value.trim();
  if(!t&&!b){alert('กรุณาพิมพ์หัวข้อหรือเนื้อหา');return}
- S.notes.push({id:uid(),title:t||'(ไม่มีหัวข้อ)',body:b,date:now.toISOString().slice(0,10),ts:Date.now(),by:auth.currentUser.email,pin:false});
+ S.notes.push({id:uid(),title:t||'(ไม่มีหัวข้อ)',body:b,date:ymd(),ts:Date.now(),by:auth.currentUser.email,pin:false});
  save();R();
 }
 function saveNote(id){const n=S.notes.find(x=>x.id===id);n.title=$('#et').value.trim()||n.title;n.body=$('#eb').value.trim();EN=null;save();R()}
@@ -409,7 +424,7 @@ $('#lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 function addRole(){const e=$('#re').value.trim().toLowerCase();if(!e)return;S.roles=S.roles.filter(r=>r.id!==e);S.roles.push({id:e,role:$('#rr').value});save();R()}
 function togRole(id){if(id===me()){alert('ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้');return}const r=S.roles.find(x=>x.id===id);r.role=r.role==='admin'?'member':'admin';save();R()}
 function delRole(id){if(id===me()){alert('ไม่สามารถลบสิทธิ์ของตัวเองได้');return}if(!confirm('ลบสิทธิ์ผู้ใช้นี้?'))return;S.roles=S.roles.filter(r=>r.id!==id);save();R()}
-Object.assign(window,{sendNow,saveAnn,annStatus,annAll,setEA,delAnn,annImg,addNote,saveNote,pinNote,delNote,setEN,addCat,renCat,delCat,clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
+Object.assign(window,{editPayDate,sendNow,saveAnn,annStatus,annAll,setEA,delAnn,annImg,addNote,saveNote,pinNote,delNote,setEN,addCat,renCat,delCat,clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
 const RR=()=>{const a=document.activeElement;if(a&&['INPUT','SELECT','TEXTAREA'].includes(a.tagName)&&$('#v').contains(a))return;R()};
 let unsubs=[];
 function listen(){
