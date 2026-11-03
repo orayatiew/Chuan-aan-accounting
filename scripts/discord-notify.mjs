@@ -36,10 +36,21 @@ export function decide(todayStr, force) {
   return null;
 }
 
-export function buildMessage({ mode, y, m, org, members, paid, banks }) {
-  const unpaid = members.filter(x => !paid[x.id]);
-  const list = unpaid.map(x => `• ${x.name} — ${baht(feeOf(x))} บาท`).join('\n');
-  const total = unpaid.reduce((s, x) => s + feeOf(x), 0);
+// ยอดทบ: ถ้าเดือนก่อนหน้าถูกทำเครื่องหมาย "defer" (ทบไปเดือนหน้า) ยอดของเดือนนั้นจะถูกบวกเข้ามา (ทบต่อเนื่องได้หลายเดือน)
+const prevMonth = k => { let [y, m] = k.split('-').map(Number); m--; if (m < 1) { m = 12; y--; } return `${y}-${pad(m)}`; };
+export function carryOf(dues, feeById, key, id, depth = 0) {
+  if (depth > 36) return 0;
+  const p = prevMonth(key);
+  if (((dues[p] || {})[id]) !== 'defer') return 0;
+  return (feeById[id] || 0) + carryOf(dues, feeById, p, id, depth + 1);
+}
+
+export function buildMessage({ mode, y, m, org, members, paid, banks, carry = {} }) {
+  const amt = x => feeOf(x) + (carry[x.id] || 0);
+  const unpaid = members.filter(x => !paid[x.id]);                 // ยังไม่จ่าย (ไม่รวมที่ทบไปเดือนหน้า)
+  const deferred = members.filter(x => paid[x.id] === 'defer');    // ทบไปเดือนหน้า ไม่ถือว่าค้าง
+  const list = unpaid.map(x => `• ${x.name} — ${baht(amt(x))} บาท${carry[x.id] ? ` (รวมยอดทบ ${baht(carry[x.id])})` : ''}`).join('\n');
+  const total = unpaid.reduce((s, x) => s + amt(x), 0);
   const L = [];
   if (MENTION_EVERYONE && unpaid.length) L.push('@everyone');
   if (mode === 'pay') {
@@ -51,11 +62,11 @@ export function buildMessage({ mode, y, m, org, members, paid, banks }) {
     if (unpaid.length) L.push(`ยังค้างชำระ ${unpaid.length} คน (รวม ${baht(total)} บาท):`, list);
     else L.push('ทุกคนชำระครบแล้ว ✅');
   }
+  if (deferred.length) L.push('', `⏭️ ทบไปเดือนหน้า: ${deferred.map(x => `${x.name} (${baht(amt(x))})`).join(', ')}`);
   if (unpaid.length) {
     if (banks.length) L.push('', '💳 โอนเข้าบัญชี:', ...banks.map(b => `• ${b.bank} ${b.no} (${b.name})`));
     // ครอบลิงก์ด้วย <> เพื่อไม่ให้ Discord แสดงตัวอย่างลิงก์ขนาดใหญ่ (ยังกดได้ตามปกติ)
     L.push('', `📝 ชำระเงินแล้ว สามารถแนบสลิปแล้วทำเครื่องหมายว่าจ่ายแล้วได้ที่เว็บไซต์ <${SITE_URL}> ที่ Tab : Support Project`);
-    L.push('', `Username : member@chuanaan.com และ Password : m12345`);
   }
   return L.join('\n').slice(0, 1900);
 }
@@ -65,15 +76,19 @@ export async function runReminder({ db, hook, today, force }) {
   if (!d) { console.log(`[เรียกเก็บเงิน] วันนี้ (${today}) ไม่ใช่วันแจ้งเตือน`); return; }
   if (!hook) throw new Error('ยังไม่ได้ตั้งค่า secret DISCORD_WEBHOOK_URL (ห้องแจ้งเตือนบัญชี)');
   const key = `${d.y}-${pad(d.m)}`;
-  const [mem, bk, du, og] = await Promise.all([
+  const [mem, bk, dd, og] = await Promise.all([
     db.collection('members').get(), db.collection('banks').get(),
-    db.doc(`dues/${key}`).get(), db.doc('meta/org').get(),
+    db.collection('dues').get(), db.doc('meta/org').get(),
   ]);
   const members = mem.docs.map(x => x.data()).sort((a, b) => String(a.name).localeCompare(String(b.name), 'th'));
   if (!members.length) { console.log('[เรียกเก็บเงิน] ยังไม่มีสมาชิก'); return; }
+  const dues = {}; dd.docs.forEach(x => { dues[x.id] = x.data(); });
+  const feeById = Object.fromEntries(members.map(x => [x.id, feeOf(x)]));
+  const carry = {};
+  for (const x of members) { const c = carryOf(dues, feeById, key, x.id); if (c) carry[x.id] = c; }
   const content = buildMessage({
     mode: d.mode, y: d.y, m: d.m, org: (og.data() || {}).name || 'ทีมของเรา',
-    members, paid: du.data() || {}, banks: bk.docs.map(x => x.data()),
+    members, paid: dues[key] || {}, banks: bk.docs.map(x => x.data()), carry,
   });
   const res = await fetch(hook, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -161,7 +176,21 @@ async function main() {
   const has = k => (env[k] ? 'ตั้งค่าแล้ว' : 'ยังไม่ได้ตั้งค่า');
   console.log(`งานที่รัน: ${task}`);
   console.log(`Secrets — FIREBASE_SERVICE_ACCOUNT: ${has('FIREBASE_SERVICE_ACCOUNT')}, DISCORD_WEBHOOK_URL: ${has('DISCORD_WEBHOOK_URL')}, DISCORD_WEBHOOK_ANNOUNCE: ${has('DISCORD_WEBHOOK_ANNOUNCE')}`);
-  if (!['reminder', 'announce', 'both'].includes(task)) throw new Error(`task ไม่ถูกต้อง: ${task} (ใช้ reminder, announce หรือ both)`);
+  if (!['reminder', 'announce', 'both', 'ping'].includes(task)) throw new Error(`task ไม่ถูกต้อง: ${task} (ใช้ reminder, announce, both หรือ ping)`);
+  if (task === 'ping') {
+    // ทดสอบว่า Webhook แต่ละตัวส่งเข้า Discord ได้จริง (ไม่ต้องใช้ข้อมูลหรือวันที่ใดๆ)
+    let bad = false;
+    for (const [name, url] of [['DISCORD_WEBHOOK_URL (ห้องแจ้งเตือนบัญชี)', env.DISCORD_WEBHOOK_URL], ['DISCORD_WEBHOOK_ANNOUNCE (ห้องประกาศ)', env.DISCORD_WEBHOOK_ANNOUNCE]]) {
+      if (!url) { console.error(`✗ ${name}: ยังไม่ได้ตั้งค่า secret`); bad = true; continue; }
+      try {
+        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `✅ ทดสอบการเชื่อมต่อ: ${name}` }) });
+        if (!r.ok) throw new Error(`Discord ตอบกลับ ${r.status}`);
+        console.log(`✓ ${name}: ส่งข้อความทดสอบแล้ว`);
+      } catch (e) { console.error(`✗ ${name}: ${e.message}`); bad = true; }
+    }
+    if (bad) process.exitCode = 1;
+    return;
+  }
   if (!env.FIREBASE_SERVICE_ACCOUNT) throw new Error('ยังไม่ได้ตั้งค่า secret FIREBASE_SERVICE_ACCOUNT');
 
   const { default: admin } = await import('firebase-admin');
