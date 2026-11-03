@@ -153,6 +153,11 @@ function openFile(id,kind){
 const per=t=>t.period||t.date.slice(0,7);
 const ymd=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const inM=m=>S.tx.filter(t=>per(t)===m);
+const nextM=m=>{let[y,k]=m.split('-').map(Number);k++;if(k>12){k=1;y++}return y+'-'+String(k).padStart(2,'0')};
+const prevM=m=>{let[y,k]=m.split('-').map(Number);k--;if(k<1){k=12;y--}return y+'-'+String(k).padStart(2,'0')};
+// ยอดทบ: ถ้าเดือนก่อนหน้าถูกทำเครื่องหมาย 'defer' ยอดของเดือนนั้นจะถูกบวกเข้ามา (ทบต่อเนื่องได้หลายเดือน)
+const carryIn=(m,id,d=0)=>{if(d>36)return 0;const p=prevM(m);if(((S.dues[p]||{})[id])!=='defer')return 0;const mem=S.members.find(x=>x.id===id);return mem?(+mem.fee+carryIn(p,id,d+1)):0};
+const owedOf=(mem,m=M)=>+mem.fee+carryIn(m,mem.id);
 const sum=(a,t)=>a.filter(x=>x.type===t).reduce((s,x)=>s+ +x.amount,0);
 const cards=a=>{const i=sum(a,'in'),e=sum(a,'out');return `<div class="grid"><div class="sum i"><small>รายรับ</small><b class="inc">${fmt(i)}</b></div><div class="sum e"><small>รายจ่าย</small><b class="exp">${fmt(e)}</b></div><div class="sum b"><small>คงเหลือ</small><b>${fmt(i-e)}</b></div></div>`};
 const monthPick=()=>`<div class="top noprint"><div><label>เดือน</label><input type="month" value="${M}" onchange="setM(this.value)"></div></div>`;
@@ -170,9 +175,9 @@ function R(){
 function banks(){return S.banks.length?S.banks.map(b=>`<div class="row"><div class="g1"><b>${esc(b.bank)}</b> ${esc(b.no)}<small>ชื่อบัญชี ${esc(b.name)}</small></div><button class="btn g s" onclick="cp('${esc(b.no)}',this)">คัดลอกเลขบัญชี</button></div>`).join(''):'<div class="empty">ยังไม่มีบัญชีรับโอน เพิ่มได้ที่หน้าตั้งค่า</div>'}
 function cp(t,b){try{navigator.clipboard.writeText(t)}catch(e){}b.textContent='คัดลอกแล้ว';setTimeout(()=>b.textContent='คัดลอกเลขบัญชี',1200)}
 function vHome(){
- const unpaid=S.members.filter(m=>!(S.dues[M]||{})[m.id]);
+ const D=S.dues[M]||{},unpaid=S.members.filter(m=>!D[m.id]),dfr=S.members.filter(m=>D[m.id]==='defer');
  return monthPick()+`<h2>${mlabel(M)}</h2>`+cards(inM(M))+`<div class="card" style="margin-top:12px"><h2>ยอดสะสมทั้งหมด</h2>${cards(S.tx)}</div>
- <div class="card"><h2>ค้างชำระเดือนนี้ (${unpaid.length} คน)</h2>${unpaid.length?unpaid.map(m=>`<div class="row"><div class="g1">${esc(m.name)}</div><span class="amt exp">${fmt(m.fee)}</span></div>`).join(''):`<div class="empty">${S.members.length?'ชำระครบทุกคนแล้ว':'ยังไม่มีสมาชิก เพิ่มได้ที่หน้าตั้งค่า'}</div>`}</div>
+ <div class="card"><h2>ค้างชำระเดือนนี้ (${unpaid.length} คน)</h2>${unpaid.length?unpaid.map(m=>{const c=carryIn(M,m.id);return `<div class="row"><div class="g1">${esc(m.name)}${c?`<small>รวมยอดทบจากเดือนก่อน ${fmt(c)}</small>`:''}</div><span class="amt exp">${fmt(owedOf(m))}</span></div>`}).join(''):`<div class="empty">${S.members.length?'ชำระครบทุกคนแล้ว':'ยังไม่มีสมาชิก เพิ่มได้ที่หน้าตั้งค่า'}</div>`}${dfr.length?`<p class="mu" style="font-size:13px;margin:8px 0 0">ทบไป ${mlabel(nextM(M))}: ${dfr.map(m=>esc(m.name)).join(', ')}</p>`:''}</div>
  <div class="card"><h2>บัญชีสำหรับโอนเงิน</h2>${banks()}</div>`;
 }
 function vTx(){
@@ -201,24 +206,30 @@ async function addTx(){
 }
 function delTx(id){if(!ADMIN())return;if(!confirm('ลบรายการนี้?'))return;S.tx=S.tx.filter(t=>t.id!==id);save();R()}
 function vDues(){
- const D=S.dues[M]||{};const paid=S.members.filter(m=>D[m.id]);
- const got=paid.reduce((s,m)=>s+ +m.fee,0),all=S.members.reduce((s,m)=>s+ +m.fee,0);
- return monthPick()+`<div class="grid"><div class="sum i"><small>เก็บแล้ว (${paid.length}/${S.members.length} คน)</small><b class="inc">${fmt(got)}</b></div><div class="sum e"><small>ค้างชำระ</small><b class="exp">${fmt(all-got)}</b></div></div>
+ const D=S.dues[M]||{};
+ const paidL=S.members.filter(m=>D[m.id]&&D[m.id]!=='defer'),defL=S.members.filter(m=>D[m.id]==='defer'),unL=S.members.filter(m=>!D[m.id]);
+ const paidAmt=m=>(dueTx(m.id)||{}).amount??owedOf(m);
+ const got=paidL.reduce((t,m)=>t+ +paidAmt(m),0),left=unL.reduce((t,m)=>t+owedOf(m),0),cry=defL.reduce((t,m)=>t+owedOf(m),0);
+ return monthPick()+`<div class="grid"><div class="sum i"><small>เก็บแล้ว (${paidL.length}/${S.members.length} คน)</small><b class="inc">${fmt(got)}</b></div><div class="sum e"><small>ค้างชำระ (${unL.length} คน)</small><b class="exp">${fmt(left)}</b></div>${defL.length?`<div class="sum b"><small>ทบไป ${mlabel(nextM(M))} (${defL.length} คน)</small><b>${fmt(cry)}</b></div>`:''}</div>
  <div class="card" style="margin-top:12px"><h2>สถานะการชำระ ${mlabel(M)}</h2>
- ${S.members.length?S.members.map(m=>`<div class="row" style="flex-wrap:wrap"><div class="g1" style="min-width:140px"><b>${esc(m.name)}</b><small>${D[m.id]?'ชำระเมื่อ '+D[m.id]:'ยังไม่ชำระ'}</small></div><span class="amt">${fmt(m.fee)}</span><span class="tag ${D[m.id]?'ok':'no'}">${D[m.id]?'ชำระแล้ว':'ค้าง'}</span>${dueAct(m,D)}</div>`).join(''):'<div class="empty">ยังไม่มีสมาชิก เพิ่มได้ที่หน้าตั้งค่า</div>'}
- <p class="mu" style="font-size:13px;margin:10px 0 0">เลือกวันที่ชำระและแนบสลิปได้ก่อนกดทำเครื่องหมายว่าชำระ (สลิปไม่บังคับ) ระบบจะบันทึกเป็นรายรับหมวด “ค่าสมาชิก” พร้อมสลิปให้อัตโนมัติ ถ้าชำระช้ากว่าเดือนที่เรียกเก็บ (เช่น จ่ายเดือน ต.ค. ในเดือน พ.ย.) ยอดจะถูกนับเข้ารายรับของเดือนที่กำลังดูอยู่ ส่วนวันที่จริงยังแสดงไว้ ผู้ดูแลกดแก้วันที่ได้</p></div>
+ ${S.members.length?S.members.map(m=>{const st=D[m.id],isDef=st==='defer',isPaid=st&&!isDef,c=carryIn(M,m.id);return `<div class="row" style="flex-wrap:wrap"><div class="g1" style="min-width:140px"><b>${esc(m.name)}</b><small>${isPaid?'ชำระเมื่อ '+st:isDef?'ทบไป '+mlabel(nextM(M)):'ยังไม่ชำระ'}${c?' · รวมยอดทบจากเดือนก่อน '+fmt(c):''}</small></div><span class="amt">${fmt(isPaid?paidAmt(m):owedOf(m))}</span><span class="tag ${isPaid?'ok':isDef?'':'no'}">${isPaid?'ชำระแล้ว':isDef?'ทบเดือนหน้า':'ค้าง'}</span>${dueAct(m,D)}</div>`}).join(''):'<div class="empty">ยังไม่มีสมาชิก เพิ่มได้ที่หน้าตั้งค่า</div>'}
+ <p class="mu" style="font-size:13px;margin:10px 0 0">เลือกวันที่ชำระและแนบสลิปได้ก่อนกดทำเครื่องหมายว่าชำระ (สลิปไม่บังคับ) ระบบจะบันทึกเป็นรายรับหมวด “ค่าสมาชิก” พร้อมสลิปให้อัตโนมัติ ถ้าชำระช้ากว่าเดือนที่เรียกเก็บ (เช่น จ่ายเดือน ต.ค. ในเดือน พ.ย.) ยอดจะถูกนับเข้ารายรับของเดือนที่กำลังดูอยู่ ส่วนวันที่จริงยังแสดงไว้ ผู้ดูแลกดแก้วันที่ได้<br>“ทบไปเดือนหน้า” (เฉพาะ Admin) ใช้เมื่อสมาชิกยังไม่จ่ายแต่ไม่ต้องการให้ขึ้นเป็นค้างชำระ ยอดของเดือนนี้จะถูกบวกเพิ่มในเดือนถัดไป และเมื่อจ่ายจะบันทึกยอดรวมเข้าเดือนที่จ่าย</p></div>
+ ${ADMIN()?`<div class="card noprint"><h2>แจ้งเตือนเข้า Discord</h2><p class="mu" style="margin-top:0;font-size:13px">ส่งรายชื่อผู้ที่ยังไม่ได้ชำระของเดือน ${mlabel(M)} เข้าห้องแจ้งเตือนบัญชีทันที (นอกเหนือจากการแจ้งเตือนอัตโนมัติวันที่ 30 และ 1)</p><label style="display:flex;gap:6px;align-items:center;margin:0 0 8px;color:var(--tx)"><input type="checkbox" id="rm" checked style="width:auto"> แท็ก @everyone</label><button class="btn" onclick="sendReminder(this)">ส่งแจ้งเตือนผู้ที่ยังไม่ชำระ (${unL.length} คน)</button></div>`:''}
  <div class="card"><h2>โอนเงินเข้าบัญชี</h2>${banks()}</div>`;
 }
 const dateIn=id=>`<input type="date" id="dt_${id}" value="${ymd()}" aria-label="วันที่ชำระ" title="วันที่ชำระ" style="width:150px;padding:4px 8px;font-size:14px">`;
 const slipIn=id=>`<input type="file" id="sl_${id}" accept="image/*,application/pdf" aria-label="แนบสลิป" style="width:200px;font-size:12px;padding:4px">`;
 const dueTx=id=>S.tx.find(t=>t.id==='d_'+M+'_'+id);
 function dueAct(m,D){
- const t=dueTx(m.id);let h='';
- if(D[m.id]){
+ const t=dueTx(m.id),st=D[m.id];let h='';
+ if(st&&st!=='defer'){
   if(t&&t.file)h+=`<button class="btn g s" onclick="openFile('${t.id}')">ดูสลิป</button>`;
   else if(ADMIN())h+=slipIn(m.id)+`<button class="btn g s" onclick="attachSlip('${m.id}')">แนบสลิป</button>`;
   if(ADMIN())h+=`<button class="btn g s" onclick="editPayDate('${m.id}')">แก้วันที่</button><button class="btn g s" onclick="payTog('${m.id}')">ยกเลิก</button>`;
- }else h+=dateIn(m.id)+slipIn(m.id)+`<button class="btn s" onclick="payTog('${m.id}')">ทำเครื่องหมายว่าชำระ</button>`;
+ }else{
+  h+=dateIn(m.id)+slipIn(m.id)+`<button class="btn s" onclick="payTog('${m.id}')">ทำเครื่องหมายว่าชำระ</button>`;
+  if(ADMIN())h+=st==='defer'?`<button class="btn g s" onclick="deferTog('${m.id}')">ยกเลิกการทบ</button>`:`<button class="btn g s" onclick="deferTog('${m.id}')">ทบไปเดือนหน้า</button>`;
+ }
  return h;
 }
 async function attachSlip(id){
@@ -227,20 +238,58 @@ async function attachSlip(id){
  let f=null;try{f=await readFile(i.files[0])}catch(e){alert('อ่านไฟล์ไม่ได้');return}
  if(!f)return;t.file=f;save();R();
 }
-async function payTog(id){if(!ADMIN()&&(S.dues[M]||{})[id])return;
+async function payTog(id){
+ const c0=(S.dues[M]||{})[id];
+ if(!ADMIN()&&c0&&c0!=='defer')return;
  const m=S.members.find(x=>x.id===id),k='d_'+M+'_'+id;S.dues[M]=S.dues[M]||{};
- if(S.dues[M][id]){delete S.dues[M][id];S.tx=S.tx.filter(t=>t.id!==k)}
- else{let file=null;const inp=$('#sl_'+id),dv=($('#dt_'+id)||{}).value||'';try{file=inp&&inp.files[0]?await readFile(inp.files[0]):null}catch(e){alert('อ่านไฟล์ไม่ได้');return}const d=/^\d{4}-\d{2}-\d{2}$/.test(dv)?dv:ymd();S.dues[M][id]=d;const t={id:k,type:'in',date:d,amount:m.fee,cat:'ค่าสมาชิก',note:m.name+' '+mlabel(M),file};if(d.slice(0,7)!==M)t.period=M;S.tx.push(t)}
+ if(c0&&c0!=='defer'){delete S.dues[M][id];S.tx=S.tx.filter(t=>t.id!==k)}
+ else{
+  let file=null;const inp=$('#sl_'+id),dv=($('#dt_'+id)||{}).value||'';
+  try{file=inp&&inp.files[0]?await readFile(inp.files[0]):null}catch(e){alert('อ่านไฟล์ไม่ได้');return}
+  const d=/^\d{4}-\d{2}-\d{2}$/.test(dv)?dv:ymd(),c=carryIn(M,id);
+  S.dues[M][id]=d;
+  const t={id:k,type:'in',date:d,amount:owedOf(m),cat:'ค่าสมาชิก',note:m.name+' '+mlabel(M)+(c?' (รวมยอดทบ '+fmt(c)+')':''),file};
+  if(d.slice(0,7)!==M)t.period=M;
+  S.tx.push(t);
+ }
  save();R();
 }
 function editPayDate(id){
- if(!ADMIN())return;const cur=(S.dues[M]||{})[id];if(!cur)return;
+ if(!ADMIN())return;const cur=(S.dues[M]||{})[id];if(!cur||cur==='defer')return;
  const v=(prompt('วันที่ชำระ (รูปแบบ ปปปป-ดด-วว เช่น '+ymd()+')',cur)||'').trim();
  if(!v)return;
  if(!/^\d{4}-\d{2}-\d{2}$/.test(v)||isNaN(new Date(v))){alert('รูปแบบวันที่ไม่ถูกต้อง');return}
  S.dues[M][id]=v;
  const t=dueTx(id);if(t){t.date=v;if(v.slice(0,7)!==M)t.period=M;else delete t.period}
  save();R();
+}
+function deferTog(id){
+ if(!ADMIN())return;
+ const m=S.members.find(x=>x.id===id);if(!m)return;
+ S.dues[M]=S.dues[M]||{};const c=S.dues[M][id];
+ if(c==='defer')delete S.dues[M][id];
+ else if(!c){
+  const cur=owedOf(m);
+  if(!confirm('ทบยอดของ '+m.name+' ('+fmt(cur)+' บาท) ไปเดือน '+mlabel(nextM(M))+'?\nยอดเดือนนั้นจะเป็น '+fmt(cur+ +m.fee)+' บาท และเดือนนี้จะไม่นับเป็นค้างชำระ'))return;
+  S.dues[M][id]='defer';
+ }else return;
+ save();R();
+}
+async function sendReminder(btn){
+ if(!ADMIN())return;
+ const D=S.dues[M]||{},un=S.members.filter(m=>!D[m.id]);
+ if(!un.length){alert('เดือนนี้ไม่มีผู้ค้างชำระ ไม่ต้องส่งแจ้งเตือน');return}
+ const tag=$('#rm')?$('#rm').checked:true;
+ if(!confirm('ส่งแจ้งเตือนรายชื่อผู้ที่ยังไม่ได้ชำระ '+un.length+' คน ของเดือน '+mlabel(M)+' ลง Discord'+(tag?' (แท็ก @everyone)':'')+' ?'))return;
+ if(btn){btn.disabled=true;btn.textContent='กำลังส่ง…'}
+ try{
+  const t=await auth.currentUser.getIdToken();
+  const r=await fetch('/api/send-reminder',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({month:M,mention:tag})});
+  if(r.status===404||r.status===405){alert('ยังไม่ได้เปิดใช้การส่งแจ้งเตือนจากเว็บ (ต้องอัปเดต src/worker.js บน Cloudflare)\nระหว่างนี้ส่งได้ที่ GitHub → Actions → Discord notify → Run workflow (task = reminder, mode = unpaid)');return}
+  const j=await r.json().catch(()=>({}));
+  alert(r.ok&&j.ok?'ส่งแจ้งเตือนลง Discord แล้ว':'ส่งไม่สำเร็จ: '+(j.error||r.status));
+ }catch(e){alert('ส่งไม่สำเร็จ: '+e.message)}
+ finally{R()}
 }
 function vRep(){
  const Y=M.slice(0,4),a=inM(M);
@@ -424,7 +473,7 @@ $('#lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 function addRole(){const e=$('#re').value.trim().toLowerCase();if(!e)return;S.roles=S.roles.filter(r=>r.id!==e);S.roles.push({id:e,role:$('#rr').value});save();R()}
 function togRole(id){if(id===me()){alert('ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้');return}const r=S.roles.find(x=>x.id===id);r.role=r.role==='admin'?'member':'admin';save();R()}
 function delRole(id){if(id===me()){alert('ไม่สามารถลบสิทธิ์ของตัวเองได้');return}if(!confirm('ลบสิทธิ์ผู้ใช้นี้?'))return;S.roles=S.roles.filter(r=>r.id!==id);save();R()}
-Object.assign(window,{editPayDate,sendNow,saveAnn,annStatus,annAll,setEA,delAnn,annImg,addNote,saveNote,pinNote,delNote,setEN,addCat,renCat,delCat,clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
+Object.assign(window,{deferTog,sendReminder,editPayDate,sendNow,saveAnn,annStatus,annAll,setEA,delAnn,annImg,addNote,saveNote,pinNote,delNote,setEN,addCat,renCat,delCat,clearYear,attachSlip,addRole,togRole,delRole,setT,setType,setM,setEB,saveOrg,doLogin,doLogout,cp,openFile,addTx,delTx,payTog,addStm,delStm,addMem,delMem,addBank,delBank,saveBank});
 const RR=()=>{const a=document.activeElement;if(a&&['INPUT','SELECT','TEXTAREA'].includes(a.tagName)&&$('#v').contains(a))return;R()};
 let unsubs=[];
 function listen(){
